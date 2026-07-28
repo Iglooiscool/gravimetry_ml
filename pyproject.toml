@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gravimetry-ml"
+version = "0.1.0"
+description = "Data-driven reconstruction for minimal gravimetry inverse problems"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "minimal-gravimetry-ml contributors" }
+]
+dependencies = [
+  "numpy>=1.26",
+  "scipy>=1.12",
+  "matplotlib>=3.8",
+  "pandas>=2.2",
+  "pyyaml>=6.0",
+  "torch>=2.11"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.5",
+  "black>=24.0",
+  "jupyterlab>=4.0"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["measurements", "datasets", "plotting", "pipeline", "main"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
