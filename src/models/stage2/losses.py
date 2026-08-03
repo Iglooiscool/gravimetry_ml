@@ -12,13 +12,16 @@ class WeightedBinaryMaskLoss(nn.Module):
 
     def __init__(
         self,
-        pos_weight: torch.Tensor,
+        pos_weight: torch.Tensor | None,
         loss_type: str = "bce",
         dice_loss_weight: float = 0.0,
         dice_smooth: float = 1.0,
     ):
         super().__init__()
-        self.register_buffer("pos_weight", pos_weight)
+        if pos_weight is not None:
+            self.register_buffer("pos_weight", pos_weight)
+        else:
+            self.pos_weight = None
         if loss_type not in {"bce", "bce_dice", "mse"}:
             raise ValueError("loss_type must be 'bce', 'bce_dice', or 'mse'")
         self.loss_type = loss_type

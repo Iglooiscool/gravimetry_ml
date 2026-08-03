@@ -186,6 +186,7 @@ def fit_stage2_model(
     loss_type: str = "bce",
     dice_loss_weight: float = 0.0,
     dice_smooth: float = 1.0,
+    use_foreground_pos_weight: bool = True,
 ) -> ModelTrainingResult:
     """Train Stage 2 with BCE-with-logits on normalized coefficient inputs."""
 
@@ -208,7 +209,9 @@ def fit_stage2_model(
             edge_weight_mode=edge_weight_mode,
         )
 
-    if pos_weight is None:
+    if not use_foreground_pos_weight:
+        pos_weight = None
+    elif pos_weight is None:
         positive_fraction = float(np.mean(train_targets))
         positive_fraction = min(max(positive_fraction, 1e-4), 1.0 - 1e-4)
         pos_weight = (1.0 - positive_fraction) / positive_fraction
@@ -223,7 +226,7 @@ def fit_stage2_model(
         batch_size=batch_size,
         learning_rate=learning_rate,
         criterion=WeightedBinaryMaskLoss(
-            pos_weight=torch.tensor(float(pos_weight), dtype=torch.float32, device=device),
+            pos_weight=None if pos_weight is None else torch.tensor(float(pos_weight), dtype=torch.float32, device=device),
             loss_type=loss_type,
             dice_loss_weight=dice_loss_weight,
             dice_smooth=dice_smooth,

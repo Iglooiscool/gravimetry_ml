@@ -143,6 +143,7 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
         loss_type=stage2_training.loss_type,
         dice_loss_weight=stage2_training.dice_loss_weight,
         dice_smooth=stage2_training.dice_smooth,
+        use_foreground_pos_weight=run_config.model.stage2.use_foreground_pos_weight,
     )
 
     predicted_test_masks = predict_stage2_logits(stage2_model, predicted_test_coefficients, device=device, training_result=stage2_history)
