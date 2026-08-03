@@ -59,19 +59,20 @@ def _fit_stage1_model(
     best_state_dict: dict[str, torch.Tensor] | None = None
     wait_count = 0
     global_step = 0
-    stop_training = False
-
     for epoch_index in range(epochs):
         model.train()
         train_losses: list[float] = []
         validated_this_epoch = False
+        epoch_best_validation_loss = float("inf")
+        previous_best_validation_loss = best_validation_loss
 
         def run_validation() -> None:
-            nonlocal best_validation_loss, best_state_dict, wait_count, stop_training, validated_this_epoch
+            nonlocal best_validation_loss, best_state_dict, epoch_best_validation_loss, validated_this_epoch
             current_validation_loss = _evaluate_model(model, val_loader, criterion, device)
             history["val_loss"].append(current_validation_loss)
             history["validation_steps"].append(global_step)
             validated_this_epoch = True
+            epoch_best_validation_loss = min(epoch_best_validation_loss, current_validation_loss)
 
             if verbose:
                 latest_train_loss = float(np.mean(train_losses)) if train_losses else float("nan")
@@ -80,17 +81,9 @@ def _fit_stage1_model(
                     f"train_loss={latest_train_loss:.6f} | val_loss={current_validation_loss:.6f}"
                 )
 
-            stop_training, updated_best_validation_loss, updated_wait_count = stop_if_overfitting(
-                validation_loss=current_validation_loss,
-                best_validation_loss=best_validation_loss,
-                wait_count=wait_count,
-                patience=early_stopping_patience,
-            )
-            if updated_best_validation_loss < best_validation_loss:
+            if current_validation_loss < best_validation_loss:
                 best_validation_loss = current_validation_loss
                 best_state_dict = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
-            best_validation_loss = updated_best_validation_loss
-            wait_count = updated_wait_count
 
         for batch_features, batch_targets in train_loader:
             batch_features = batch_features.to(device)
@@ -105,15 +98,18 @@ def _fit_stage1_model(
 
             if validation_frequency is not None and validation_frequency > 0 and global_step % validation_frequency == 0:
                 run_validation()
-                if stop_training:
-                    break
                 model.train()
 
         if not validated_this_epoch:
             run_validation()
 
         history["train_loss"].append(float(np.mean(train_losses)))
-        if stop_training:
+        improved_this_epoch = epoch_best_validation_loss < previous_best_validation_loss
+        if improved_this_epoch:
+            wait_count = 0
+        else:
+            wait_count += 1
+        if early_stopping_patience is not None and wait_count >= early_stopping_patience:
             break
 
     if best_state_dict is not None:

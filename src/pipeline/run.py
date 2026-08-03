@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import torch
+import numpy as np
 
 from datasets import build_two_stage_datasets, save_two_stage_dataset
 from models import (
@@ -18,7 +19,7 @@ from models import (
 from plotting import save_condition_number_plot, save_two_stage_summary
 
 from .artifacts import build_run_summary, save_model_weights, save_run_figures, write_run_summary
-from .diagnostics import build_stage2_diagnostics, summarize_training_history
+from .diagnostics import build_annulus_center_diagnostics, build_stage2_diagnostics, summarize_training_history
 from .evaluation import build_run_metrics, select_stage2_threshold
 
 
@@ -42,6 +43,29 @@ def _build_stage2_model(run_config):
             decoder_channels=stage2_config.decoder_channels,
         )
     raise ValueError("stage2.model_type must be 'mlp' or 'conv_decoder'")
+
+
+def _augment_rectangle_training_rows(train_features, train_masks, train_shape_types, copies: int):
+    """Duplicate rectangle rows to mirror the stronger general-model recipe."""
+
+    if copies <= 0:
+        return train_features, train_masks, train_shape_types, 0
+
+    rectangle_indices = [index for index, shape_type in enumerate(train_shape_types) if shape_type == "rectangle"]
+    if not rectangle_indices:
+        return train_features, train_masks, train_shape_types, 0
+
+    feature_rows = [train_features]
+    mask_rows = [train_masks]
+    augmented_shape_types = list(train_shape_types)
+    for _ in range(copies):
+        feature_rows.append(train_features[rectangle_indices])
+        mask_rows.append(train_masks[rectangle_indices])
+        augmented_shape_types.extend(train_shape_types[index] for index in rectangle_indices)
+
+    augmented_features = np.concatenate(feature_rows, axis=0)
+    augmented_masks = np.concatenate(mask_rows, axis=0)
+    return augmented_features, augmented_masks, tuple(augmented_shape_types), int(augmented_features.shape[0] - train_features.shape[0])
 
 
 def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[str, object]:
@@ -84,10 +108,17 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
 
     stage2_model = _build_stage2_model(run_config)
     stage2_training = run_config.model.stage2.training
+    rectangle_augmentation_copies = 2 if run_config.model.stage2.use_rectangle_edge_weighting else 0
+    augmented_train_features, augmented_train_masks, augmented_train_shape_types, rectangle_augmentation_added = _augment_rectangle_training_rows(
+        predicted_train_coefficients,
+        dataset_bundle.train.masks,
+        dataset_bundle.train.shape_types,
+        rectangle_augmentation_copies,
+    )
     stage2_history = fit_stage2_model(
         model=stage2_model,
-        train_features=predicted_train_coefficients,
-        train_targets=dataset_bundle.train.masks,
+        train_features=augmented_train_features,
+        train_targets=augmented_train_masks,
         val_features=predicted_validation_coefficients,
         val_targets=dataset_bundle.validation.masks,
         epochs=stage2_training.epochs,
@@ -97,7 +128,7 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
         validation_frequency=stage2_training.validation_frequency,
         verbose=stage2_training.verbose,
         early_stopping_patience=stage2_training.early_stopping_patience,
-        train_shape_types=dataset_bundle.train.shape_types,
+        train_shape_types=augmented_train_shape_types,
         grid_size=run_config.grid_size,
         use_rectangle_edge_weighting=run_config.model.stage2.use_rectangle_edge_weighting,
         rectangle_edge_weight=run_config.model.stage2.rectangle_edge_weight,
@@ -140,13 +171,25 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
         predicted_fixed_masks_with_true_coefficients,
         threshold_used,
     )
+    diagnostics["annulus_center"] = build_annulus_center_diagnostics(
+        predicted_fixed_masks,
+        predicted_fixed_masks_with_true_coefficients,
+        dataset_bundle.fixed.names,
+        run_config.grid_size,
+    )
     training_summary = {
         "stage1": summarize_training_history(stage1_history.history, stage1_training.epochs),
         "stage2": summarize_training_history(stage2_history.history, stage2_training.epochs),
     }
 
     save_model_weights(stage1_model, stage2_model, run_output_dir)
-    figure_paths = save_run_figures(run_config, dataset_bundle, predicted_fixed_masks, run_output_dir)
+    figure_paths = save_run_figures(
+        run_config,
+        dataset_bundle,
+        predicted_fixed_masks,
+        predicted_fixed_masks_with_true_coefficients,
+        run_output_dir,
+    )
     summary = build_run_summary(
         run_config,
         dataset_bundle,
@@ -158,7 +201,7 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
         threshold_summary,
         stage1_history,
         stage2_history,
-        training_summary,
+        {**training_summary, "rectangle_augmentation_added": rectangle_augmentation_added},
     )
     write_run_summary(summary, run_output_dir)
     return summary

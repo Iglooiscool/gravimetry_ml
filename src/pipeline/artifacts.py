@@ -17,12 +17,38 @@ def save_model_weights(stage1_model, stage2_model, run_output_dir) -> None:
     torch.save(stage2_model.state_dict(), run_output_dir / "stage2_model.pt")
 
 
-def save_run_figures(run_config, dataset_bundle, predicted_fixed_masks, run_output_dir) -> dict[str, str]:
+def save_run_figures(
+    run_config,
+    dataset_bundle,
+    predicted_fixed_masks,
+    predicted_fixed_masks_with_true_coefficients,
+    run_output_dir,
+) -> dict[str, str]:
     """Persist standard plots for a run and return their paths."""
 
     return {
         "measurement_points": str(save_measurement_points_plot(dataset_bundle.measurement_points, run_output_dir / "measurement_points.png")),
         "fixed_shapes": str(save_shape_gallery(create_fixed_benchmark_shapes(), run_output_dir / "fixed_shapes.png", grid_size=run_config.grid_size)),
+        "fixed_general_predictions": str(
+            save_reconstruction_examples(
+                true_masks=dataset_bundle.fixed.masks,
+                predicted_logits=predicted_fixed_masks,
+                names=dataset_bundle.fixed.names,
+                output_path=run_output_dir / "fixed_general_predictions.png",
+                grid_size=run_config.grid_size,
+                threshold=run_config.threshold,
+            )
+        ),
+        "fixed_general_true_coeff_predictions": str(
+            save_reconstruction_examples(
+                true_masks=dataset_bundle.fixed.masks,
+                predicted_logits=predicted_fixed_masks_with_true_coefficients,
+                names=dataset_bundle.fixed.names,
+                output_path=run_output_dir / "fixed_general_true_coeff_predictions.png",
+                grid_size=run_config.grid_size,
+                threshold=run_config.threshold,
+            )
+        ),
         "fixed_reconstructions": str(
             save_reconstruction_examples(
                 true_masks=dataset_bundle.fixed.masks,
