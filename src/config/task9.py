@@ -1,4 +1,4 @@
-"""Task 9 workflow settings."""
+"""Configuration for the experimental three-model workflow."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ class Task9GeneralMLPConfig:
 
     hidden_layer_sizes: tuple[int, ...] = (512, 1024, 2048)
     dropout_rates: tuple[float, ...] = (0.2, 0.2, 0.2)
-    use_rectangle_edge_weighting: bool = True
+    use_rectangle_edge_weighting: bool = False
     rectangle_edge_weight: float = 3.0
     rectangle_edge_width: int = 2
     edge_weight_mode: str = "rectangle"
@@ -34,7 +34,7 @@ class Task9GeneralMLPConfig:
         lr_drop_period=50,
         weight_decay=0.0001,
         gradient_clip_norm=1.0,
-        loss_type="bce",
+        loss_type="mse",
         dice_loss_weight=0.0,
         dice_smooth=1.0,
     )
@@ -59,7 +59,7 @@ class Task9SpecialistMLPConfig:
         lr_drop_period=50,
         weight_decay=0.0001,
         gradient_clip_norm=None,
-        loss_type="bce",
+        loss_type="mse",
         dice_loss_weight=0.0,
         dice_smooth=1.0,
     )
@@ -93,10 +93,10 @@ class Task9RunConfig:
     threshold: float = 0.5
     use_validation_threshold_sweep: bool = False
     threshold_candidates: tuple[float, ...] = (0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)
-    noise_level: float = 0.01
+    noise_sigma: float = 0.01
     seed: int = 42
     model: Task9StackConfig = field(default_factory=Task9StackConfig)
-    output_dir: Path = Path("outputs/task9")
+    output_dir: Path = Path("outputs/three_models")
 
     @property
     def num_measure_points(self) -> int:
@@ -146,10 +146,10 @@ class Task9SweepConfig:
     threshold: float = 0.5
     use_validation_threshold_sweep: bool = False
     threshold_candidates: tuple[float, ...] = (0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)
-    noise_level: float = 0.01
+    noise_sigma: float = 0.01
     seed: int = 42
     model: Task9StackConfig = field(default_factory=Task9StackConfig)
-    output_dir: Path = Path("outputs/task9")
+    output_dir: Path = Path("outputs/three_models")
 
     def validate(self) -> None:
         if not (len(self.n_values) == len(self.training_sizes) == len(self.validation_sizes)):
@@ -172,7 +172,7 @@ class Task9SweepConfig:
                     threshold=self.threshold,
                     use_validation_threshold_sweep=self.use_validation_threshold_sweep,
                     threshold_candidates=self.threshold_candidates,
-                    noise_level=self.noise_level,
+                    noise_sigma=self.noise_sigma,
                     seed=self.seed + index,
                     model=self.model,
                     output_dir=self.output_dir,
@@ -181,10 +181,18 @@ class Task9SweepConfig:
         return run_configs
 
 
+ThreeModelsConfig = Task9StackConfig
+ThreeModelsRunConfig = Task9RunConfig
+ThreeModelsSweepConfig = Task9SweepConfig
+
+
 __all__ = [
     "Task9GeneralMLPConfig",
     "Task9SpecialistMLPConfig",
     "Task9StackConfig",
     "Task9RunConfig",
     "Task9SweepConfig",
+    "ThreeModelsConfig",
+    "ThreeModelsRunConfig",
+    "ThreeModelsSweepConfig",
 ]

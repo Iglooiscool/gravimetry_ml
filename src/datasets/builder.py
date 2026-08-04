@@ -1,4 +1,4 @@
-"""Two-stage dataset construction."""
+"""Dataset construction shared by the model-count workflows."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from measurements import (
     add_gaussian_noise,
     build_measurement_matrix,
     coefficients_to_feature_vector,
-    coefficients_to_measurements,
     compute_coefficients,
     compute_gradient_data,
     condition_number,
@@ -71,10 +70,8 @@ def _build_split(
     for display_name, shape in shape_entries:
         mask = shape.compute_mask(grid_data.X, grid_data.Y)
         coefficient_values = compute_coefficients(mask, grid_data.X, grid_data.Y, grid_data.dA, n_max=run_config.N).coefficients
-        clean_measurement_values = coefficients_to_measurements(coefficient_values, measurement_matrix)
-        add_gaussian_noise(clean_measurement_values, run_config.noise_level, random_generator)
         gradient_values = compute_gradient_data(coefficient_values, gradient_measurement_points, run_config.N)
-        noisy_gradient_values = add_gaussian_noise(gradient_values, run_config.noise_level, random_generator)
+        noisy_gradient_values = add_gaussian_noise(gradient_values, run_config.noise_sigma, random_generator)
 
         gradient_rows.append(measurements_to_feature_vector(noisy_gradient_values))
         coefficient_rows.append(coefficients_to_feature_vector(coefficient_values))

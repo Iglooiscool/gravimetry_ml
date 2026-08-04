@@ -8,9 +8,7 @@ from torch import nn
 
 from .combined import Task9TrainedHead
 from ..common_train import ModelTrainingResult, _evaluate_model, _to_loader, compute_input_normalization, normalize_values
-from ..stage2.losses import WeightedBinaryMaskLoss
-from ..stage2.train import stop_if_safe
-from ..stage2.weights import compute_shape_edge_pixel_weights
+from ..stage2.losses import SigmoidMSEMaskLoss
 
 
 def _fit_task9_head(
@@ -150,25 +148,6 @@ def train_task9_head(
     normalized_train_features = normalize_values(train_features, input_mean, input_std)
     normalized_val_features = normalize_values(val_features, input_mean, input_std)
 
-    train_sample_weights = None
-    if use_rectangle_edge_weighting:
-        if train_shape_types is None:
-            raise ValueError("train_shape_types are required when rectangle edge weighting is enabled")
-        if grid_size is None:
-            raise ValueError("grid_size is required when rectangle edge weighting is enabled")
-        train_sample_weights = compute_shape_edge_pixel_weights(
-            masks=train_targets,
-            shape_types=train_shape_types,
-            grid_size=grid_size,
-            edge_weight=rectangle_edge_weight,
-            edge_width=rectangle_edge_width,
-            edge_weight_mode=edge_weight_mode,
-        )
-
-    positive_fraction = float(np.mean(train_targets))
-    positive_fraction = min(max(positive_fraction, 1e-4), 1.0 - 1e-4)
-    pos_weight = (1.0 - positive_fraction) / positive_fraction
-
     training_result = _fit_task9_head(
         model=model,
         train_features=normalized_train_features,
@@ -178,12 +157,7 @@ def train_task9_head(
         epochs=training_config.epochs,
         batch_size=training_config.batch_size,
         learning_rate=training_config.learning_rate,
-        criterion=WeightedBinaryMaskLoss(
-            pos_weight=torch.tensor(float(pos_weight), dtype=torch.float32, device=device),
-            loss_type=training_config.loss_type,
-            dice_loss_weight=training_config.dice_loss_weight,
-            dice_smooth=training_config.dice_smooth,
-        ),
+        criterion=SigmoidMSEMaskLoss(),
         device=device,
         validation_frequency=training_config.validation_frequency,
         verbose=training_config.verbose,
@@ -194,7 +168,7 @@ def train_task9_head(
         lr_drop_period=training_config.lr_drop_period,
         weight_decay=training_config.weight_decay,
         gradient_clip_norm=training_config.gradient_clip_norm,
-        train_sample_weights=train_sample_weights,
+        train_sample_weights=None,
     )
     training_result.input_mean = input_mean
     training_result.input_std = input_std

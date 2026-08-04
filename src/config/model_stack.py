@@ -1,4 +1,4 @@
-"""Combined stage configuration for the two-stage model stack."""
+"""Configuration for the connected two-model system."""
 
 from __future__ import annotations
 
@@ -16,4 +16,6 @@ class TwoStageStackConfig:
     stage2: Stage2ModelConfig = field(default_factory=Stage2ModelConfig)
 
 
-__all__ = ["TwoStageStackConfig"]
+TwoModelsConfig = TwoStageStackConfig
+
+__all__ = ["TwoStageStackConfig", "TwoModelsConfig"]

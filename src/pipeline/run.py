@@ -1,4 +1,4 @@
-"""Main orchestration for the two-stage pipeline."""
+"""Orchestration for the two-model reference workflow."""
 
 from __future__ import annotations
 

@@ -72,4 +72,12 @@ class WeightedBinaryMaskLoss(nn.Module):
         return bce_loss + self.dice_loss_weight * dice_loss
 
 
-__all__ = ["WeightedBinaryMaskLoss"]
+class SigmoidMSEMaskLoss(nn.Module):
+    """Task 9 PDF loss: sigmoid mask predictions trained with MSE."""
+
+    def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        probabilities = torch.sigmoid(predictions)
+        return ((probabilities - targets) ** 2).mean()
+
+
+__all__ = ["SigmoidMSEMaskLoss", "WeightedBinaryMaskLoss"]

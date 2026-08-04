@@ -17,7 +17,7 @@ from .model_stack import TwoStageStackConfig
 
 @dataclass(frozen=True)
 class TwoStageRunConfig:
-    """Settings for one full two-stage run."""
+    """Settings for one full two-model run."""
 
     N: int
     training_samples: int
@@ -28,11 +28,11 @@ class TwoStageRunConfig:
     threshold: float = 0.5
     use_validation_threshold_sweep: bool = False
     threshold_candidates: tuple[float, ...] = (0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7)
-    noise_level: float = 0.01
+    noise_sigma: float = 0.01
     seed: int = 42
     training_shape_weights: tuple[tuple[str, float], ...] | None = None
     model: TwoStageStackConfig = field(default_factory=TwoStageStackConfig)
-    output_dir: Path = Path("outputs/two_stage")
+    output_dir: Path = Path("outputs/two_models")
 
     # Purpose:
     # Return the number of unit-circle measurement points for this N value.
@@ -110,7 +110,7 @@ class TwoStageRunConfig:
 
 @dataclass(frozen=True)
 class TwoStageSweepConfig:
-    """Settings for a sweep of two-stage runs across several N values."""
+    """Settings for a sweep of two-model runs across several coefficient orders."""
 
     n_values: tuple[int, ...] = (2, 4, 6, 8, 10)
     training_sizes: tuple[int, ...] = (2000, 4000, 6000, 8000, 10000)
@@ -121,11 +121,11 @@ class TwoStageSweepConfig:
     threshold: float = 0.5
     use_validation_threshold_sweep: bool = False
     threshold_candidates: tuple[float, ...] = (0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7)
-    noise_level: float = 0.01
+    noise_sigma: float = 0.01
     seed: int = 42
     training_shape_weights: tuple[tuple[str, float], ...] | None = None
     model: TwoStageStackConfig = field(default_factory=TwoStageStackConfig)
-    output_dir: Path = Path("outputs/two_stage")
+    output_dir: Path = Path("outputs/two_models")
 
     # Purpose:
     # Check that the sweep arrays all have matching lengths.
@@ -162,7 +162,7 @@ class TwoStageSweepConfig:
                     threshold=self.threshold,
                     use_validation_threshold_sweep=self.use_validation_threshold_sweep,
                     threshold_candidates=self.threshold_candidates,
-                    noise_level=self.noise_level,
+                    noise_sigma=self.noise_sigma,
                     seed=self.seed + index,
                     training_shape_weights=self.training_shape_weights,
                     model=self.model,
@@ -170,6 +170,10 @@ class TwoStageSweepConfig:
                 )
             )
         return run_configs
+
+
+TwoModelsRunConfig = TwoStageRunConfig
+TwoModelsSweepConfig = TwoStageSweepConfig
 
 
 @dataclass(frozen=True)
@@ -183,3 +187,12 @@ class Task2GenerateConfig:
     seed: int = 42
     grid: GridSpec = GridSpec()
     sampling: ShapeSamplingConfig = ShapeSamplingConfig()
+
+
+__all__ = [
+    "TwoStageRunConfig",
+    "TwoStageSweepConfig",
+    "TwoModelsRunConfig",
+    "TwoModelsSweepConfig",
+    "Task2GenerateConfig",
+]
