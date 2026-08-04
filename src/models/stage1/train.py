@@ -18,6 +18,19 @@ from ..common_train import (
 )
 
 
+def _coefficient_features_to_complex_tensor(features: torch.Tensor) -> torch.Tensor:
+    """Convert concatenated real/imag coefficient features into a complex tensor."""
+
+    half_index = features.shape[-1] // 2
+    return torch.complex(features[..., :half_index], features[..., half_index:])
+
+
+def _complex_measurements_to_feature_tensor(values: torch.Tensor) -> torch.Tensor:
+    """Flatten complex measurements into concatenated real/imag features."""
+
+    return torch.cat((values.real, values.imag), dim=-1)
+
+
 def stop_if_overfitting(
     validation_loss: float,
     best_validation_loss: float,
@@ -47,12 +60,35 @@ def _fit_stage1_model(
     validation_frequency: int | None = None,
     verbose: bool = True,
     early_stopping_patience: int | None = None,
+    lr_drop_factor: float | None = None,
+    lr_drop_period: int | None = None,
+    weight_decay: float = 0.0,
+    gradient_clip_norm: float | None = None,
+    measurement_loss_weight: float = 0.0,
+    input_mean: np.ndarray | None = None,
+    input_std: np.ndarray | None = None,
+    target_mean: np.ndarray | None = None,
+    target_std: np.ndarray | None = None,
+    measurement_matrix: np.ndarray | None = None,
 ) -> ModelTrainingResult:
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    scheduler = None
+    if lr_drop_factor is not None and lr_drop_period is not None:
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=lr_drop_period, gamma=lr_drop_factor)
     train_loader = _to_loader(train_features, train_targets, batch_size=batch_size, shuffle=True)
     val_loader = _to_loader(val_features, val_targets, batch_size=batch_size, shuffle=False)
     criterion = nn.MSELoss()
+
+    use_measurement_loss = measurement_loss_weight > 0.0
+    if use_measurement_loss:
+        if input_mean is None or input_std is None or target_mean is None or target_std is None or measurement_matrix is None:
+            raise ValueError("Stage 1 measurement loss requires normalization values and the measurement matrix")
+        input_mean_tensor = torch.tensor(input_mean, dtype=torch.float32, device=device)
+        input_std_tensor = torch.tensor(input_std, dtype=torch.float32, device=device)
+        target_mean_tensor = torch.tensor(target_mean, dtype=torch.float32, device=device)
+        target_std_tensor = torch.tensor(target_std, dtype=torch.float32, device=device)
+        measurement_matrix_tensor = torch.tensor(measurement_matrix, dtype=torch.complex64, device=device)
 
     history = {"train_loss": [], "val_loss": [], "validation_steps": []}
     best_validation_loss = float("inf")
@@ -90,8 +126,19 @@ def _fit_stage1_model(
             batch_targets = batch_targets.to(device)
             optimizer.zero_grad()
             predictions = model(batch_features)
-            loss = criterion(predictions, batch_targets)
+            coefficient_loss = criterion(predictions, batch_targets)
+            loss = coefficient_loss
+            if use_measurement_loss:
+                denormalized_predictions = predictions * target_std_tensor + target_mean_tensor
+                predicted_coefficients = _coefficient_features_to_complex_tensor(denormalized_predictions)
+                reconstructed_measurements = predicted_coefficients @ measurement_matrix_tensor.transpose(0, 1)
+                reconstructed_features = _complex_measurements_to_feature_tensor(reconstructed_measurements)
+                normalized_reconstructed_features = (reconstructed_features - input_mean_tensor) / input_std_tensor
+                measurement_loss = criterion(normalized_reconstructed_features, batch_features)
+                loss = coefficient_loss + float(measurement_loss_weight) * measurement_loss
             loss.backward()
+            if gradient_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradient_clip_norm)
             optimizer.step()
             train_losses.append(float(loss.detach().cpu().item()))
             global_step += 1
@@ -111,6 +158,8 @@ def _fit_stage1_model(
             wait_count += 1
         if early_stopping_patience is not None and wait_count >= early_stopping_patience:
             break
+        if scheduler is not None:
+            scheduler.step()
 
     if best_state_dict is not None:
         model.load_state_dict(best_state_dict)
@@ -131,6 +180,12 @@ def fit_stage1_model(
     validation_frequency: int | None = None,
     verbose: bool = True,
     early_stopping_patience: int | None = 10,
+    lr_drop_factor: float | None = None,
+    lr_drop_period: int | None = None,
+    weight_decay: float = 0.0,
+    gradient_clip_norm: float | None = None,
+    measurement_loss_weight: float = 0.0,
+    measurement_matrix: np.ndarray | None = None,
 ) -> ModelTrainingResult:
     """Train Stage 1 with MSE on normalized inputs and targets."""
 
@@ -155,6 +210,16 @@ def fit_stage1_model(
         validation_frequency=validation_frequency,
         verbose=verbose,
         early_stopping_patience=early_stopping_patience,
+        lr_drop_factor=lr_drop_factor,
+        lr_drop_period=lr_drop_period,
+        weight_decay=weight_decay,
+        gradient_clip_norm=gradient_clip_norm,
+        measurement_loss_weight=measurement_loss_weight,
+        input_mean=input_mean,
+        input_std=input_std,
+        target_mean=target_mean,
+        target_std=target_std,
+        measurement_matrix=measurement_matrix,
     )
     training_result.input_mean = input_mean
     training_result.input_std = input_std
