@@ -21,7 +21,6 @@ class StageTrainingConfig:
     lr_drop_period: int | None = None
     weight_decay: float = 0.0
     gradient_clip_norm: float | None = None
-    measurement_loss_weight: float = 0.0
     loss_type: str = "bce"
     dice_loss_weight: float = 0.0
     dice_smooth: float = 1.0

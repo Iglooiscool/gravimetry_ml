@@ -114,8 +114,6 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
         lr_drop_period=stage1_training.lr_drop_period,
         weight_decay=stage1_training.weight_decay,
         gradient_clip_norm=stage1_training.gradient_clip_norm,
-        measurement_loss_weight=stage1_training.measurement_loss_weight,
-        measurement_matrix=dataset_bundle.measurement_matrix,
     )
 
     predicted_train_coefficients = predict_stage1_coefficients(stage1_model, dataset_bundle.train.gradient_data, device=device, training_result=stage1_history)
