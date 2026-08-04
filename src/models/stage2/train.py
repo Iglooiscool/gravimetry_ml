@@ -177,6 +177,8 @@ def fit_stage2_model(
     rectangle_edge_weight: float = 3.0,
     rectangle_edge_width: int = 2,
     edge_weight_mode: str = "rectangle",
+    annulus_edge_weight: float = 1.0,
+    annulus_edge_width: int = 2,
     min_epochs: int | None = None,
     min_improvement: float | None = None,
     lr_drop_factor: float | None = None,
@@ -207,6 +209,8 @@ def fit_stage2_model(
             edge_weight=rectangle_edge_weight,
             edge_width=rectangle_edge_width,
             edge_weight_mode=edge_weight_mode,
+            annulus_edge_weight=annulus_edge_weight,
+            annulus_edge_width=annulus_edge_width,
         )
 
     if not use_foreground_pos_weight:

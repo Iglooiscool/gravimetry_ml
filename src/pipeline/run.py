@@ -9,6 +9,7 @@ from datasets import build_two_stage_datasets, save_two_stage_dataset
 from models import (
     Stage1Regressor,
     Stage2ConvDecoder,
+    Stage2CoordConvDecoder,
     Stage2MaskPredictor,
     fit_stage1_model,
     fit_stage2_model,
@@ -42,7 +43,17 @@ def _build_stage2_model(run_config):
             latent_channels=stage2_config.latent_channels,
             decoder_channels=stage2_config.decoder_channels,
         )
-    raise ValueError("stage2.model_type must be 'mlp' or 'conv_decoder'")
+    if stage2_config.model_type == "coord_conv_decoder":
+        return Stage2CoordConvDecoder(
+            input_dim=run_config.coefficient_size,
+            output_dim=run_config.mask_pixels,
+            hidden_dims=stage2_config.hidden_layer_sizes,
+            dropout_rates=stage2_config.dropout_rates,
+            latent_grid_size=stage2_config.latent_grid_size,
+            latent_channels=stage2_config.latent_channels,
+            decoder_channels=stage2_config.decoder_channels,
+        )
+    raise ValueError("stage2.model_type must be 'mlp', 'conv_decoder', or 'coord_conv_decoder'")
 
 
 def _augment_rectangle_training_rows(train_features, train_masks, train_shape_types, copies: int):
@@ -134,6 +145,8 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
         rectangle_edge_weight=run_config.model.stage2.rectangle_edge_weight,
         rectangle_edge_width=run_config.model.stage2.rectangle_edge_width,
         edge_weight_mode=run_config.model.stage2.edge_weight_mode,
+        annulus_edge_weight=run_config.model.stage2.annulus_edge_weight,
+        annulus_edge_width=run_config.model.stage2.annulus_edge_width,
         min_epochs=stage2_training.min_epochs,
         min_improvement=stage2_training.min_improvement,
         lr_drop_factor=stage2_training.lr_drop_factor,

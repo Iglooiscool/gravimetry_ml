@@ -22,6 +22,8 @@ class Stage2ModelConfig:
     rectangle_edge_weight: float = 3.0
     rectangle_edge_width: int = 2
     edge_weight_mode: str = "rectangle"
+    annulus_edge_weight: float = 1.0
+    annulus_edge_width: int = 2
     training: StageTrainingConfig = StageTrainingConfig(
         epochs=150,
         batch_size=64,
