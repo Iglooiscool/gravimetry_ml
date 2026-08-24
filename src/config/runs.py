@@ -29,8 +29,13 @@ class TwoStageRunConfig:
     use_validation_threshold_sweep: bool = False
     threshold_candidates: tuple[float, ...] = (0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7)
     noise_sigma: float = 0.01
+    noise_mode: str = "absolute"
+    training_noise_replicas: int = 1
     seed: int = 42
     training_shape_weights: tuple[tuple[str, float], ...] | None = None
+    stage2_predicted_coefficient_augmentation_copies: int = 0
+    stage2_predicted_coefficient_noise_scale: float = 1.0
+    stage2_include_gradient_features: bool = False
     model: TwoStageStackConfig = field(default_factory=TwoStageStackConfig)
     output_dir: Path = Path("outputs/two_models")
 
@@ -95,6 +100,14 @@ class TwoStageRunConfig:
     def measurement_feature_size(self) -> int:
         return self.gradient_feature_size
 
+    @property
+    def stage2_input_size(self) -> int:
+        """Return the Stage 2 feature length for the selected input path."""
+
+        if self.stage2_include_gradient_features:
+            return self.coefficient_size + self.gradient_feature_size
+        return self.coefficient_size
+
     # Purpose:
     # Build the output folder path for this specific N run.
     #
@@ -122,8 +135,13 @@ class TwoStageSweepConfig:
     use_validation_threshold_sweep: bool = False
     threshold_candidates: tuple[float, ...] = (0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7)
     noise_sigma: float = 0.01
+    noise_mode: str = "absolute"
+    training_noise_replicas: int = 1
     seed: int = 42
     training_shape_weights: tuple[tuple[str, float], ...] | None = None
+    stage2_predicted_coefficient_augmentation_copies: int = 0
+    stage2_predicted_coefficient_noise_scale: float = 1.0
+    stage2_include_gradient_features: bool = False
     model: TwoStageStackConfig = field(default_factory=TwoStageStackConfig)
     output_dir: Path = Path("outputs/two_models")
 
@@ -163,8 +181,13 @@ class TwoStageSweepConfig:
                     use_validation_threshold_sweep=self.use_validation_threshold_sweep,
                     threshold_candidates=self.threshold_candidates,
                     noise_sigma=self.noise_sigma,
+                    noise_mode=self.noise_mode,
+                    training_noise_replicas=self.training_noise_replicas,
                     seed=self.seed + index,
                     training_shape_weights=self.training_shape_weights,
+                    stage2_predicted_coefficient_augmentation_copies=self.stage2_predicted_coefficient_augmentation_copies,
+                    stage2_predicted_coefficient_noise_scale=self.stage2_predicted_coefficient_noise_scale,
+                    stage2_include_gradient_features=self.stage2_include_gradient_features,
                     model=self.model,
                     output_dir=self.output_dir,
                 )

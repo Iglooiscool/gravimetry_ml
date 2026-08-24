@@ -1,13 +1,20 @@
 import numpy as np
 
-from config import Stage1ModelConfig, Stage2ModelConfig, StageTrainingConfig, TwoStageRunConfig, TwoStageStackConfig, TwoStageSweepConfig
+from config import OneModelRunConfig, Stage1ModelConfig, Stage2ModelConfig, StageTrainingConfig, TwoStageRunConfig, TwoStageStackConfig, TwoStageSweepConfig
 from datasets import build_two_stage_datasets
-from measurements import build_measurement_matrix, measurement_points_on_unit_circle
+from measurements import (
+    build_measurement_matrix,
+    coefficient_features_to_complex,
+    compute_gradient_data,
+    measurement_points_on_unit_circle,
+    measurements_to_feature_vector,
+)
 import torch
 
 from models import Stage1Regressor, Stage2ConvDecoder, Stage2MaskPredictor, binary_iou, compute_rectangle_edge_pixel_weights, compute_shape_edge_pixel_weights, evaluate_stage2_predictions_by_shape, fit_stage2_model, predict_stage2_logits, select_best_stage2_threshold, stop_if_overfitting, stop_if_safe
 from pipeline import run_two_stage_once
 from shapes import CircleSpec, create_fixed_benchmark_shapes, sample_random_shape
+from workflows.one_model import run_one_model
 from tuning import build_stage2_loss_upgrade_configs, build_stage2_threshold_sampling_configs, build_stage2_upgrade_tuning_configs, build_three_trial_tuning_configs, run_stage2_loss_upgrade_tuning, run_stage2_threshold_sampling_tuning, run_stage2_upgrade_tuning, run_three_trial_tuning
 
 
@@ -35,6 +42,73 @@ def test_two_stage_dataset_shapes_are_consistent():
     assert dataset.fixed.masks.shape[0] == 5
 
 
+def test_two_stage_fused_input_size_includes_raw_gradients():
+    cfg = TwoStageRunConfig(
+        N=2,
+        training_samples=8,
+        validation_samples=4,
+        stage2_include_gradient_features=True,
+    )
+
+    assert cfg.stage2_input_size == cfg.coefficient_size + cfg.gradient_feature_size
+
+
+def test_noise_is_applied_only_to_training_gradients():
+    cfg = TwoStageRunConfig(
+        N=2,
+        training_samples=32,
+        validation_samples=16,
+        test_samples=16,
+        grid_size=16,
+        noise_sigma=0.01,
+        seed=11,
+    )
+    dataset = build_two_stage_datasets(cfg)
+
+    for split in (dataset.validation, dataset.test, dataset.fixed):
+        coefficients = coefficient_features_to_complex(split.coefficients)
+        clean_gradients = np.stack(
+            [
+                measurements_to_feature_vector(
+                    compute_gradient_data(row, dataset.measurement_points, cfg.N)
+                )
+                for row in coefficients
+            ]
+        )
+        assert np.allclose(split.gradient_data, clean_gradients)
+
+    train_coefficients = coefficient_features_to_complex(dataset.train.coefficients)
+    clean_train_gradients = np.stack(
+        [
+            measurements_to_feature_vector(
+                compute_gradient_data(row, dataset.measurement_points, cfg.N)
+            )
+            for row in train_coefficients
+        ]
+    )
+    assert not np.allclose(dataset.train.gradient_data, clean_train_gradients)
+
+
+def test_training_noise_replicas_only_expand_training_split():
+    cfg = TwoStageRunConfig(
+        N=2,
+        training_samples=8,
+        validation_samples=4,
+        test_samples=3,
+        grid_size=16,
+        noise_sigma=0.01,
+        training_noise_replicas=3,
+        seed=13,
+    )
+    dataset = build_two_stage_datasets(cfg)
+
+    assert dataset.train.gradient_data.shape[0] == 24
+    assert dataset.train.coefficients.shape[0] == 24
+    assert dataset.validation.gradient_data.shape[0] == 4
+    assert dataset.test.gradient_data.shape[0] == 3
+    assert dataset.fixed.gradient_data.shape[0] == 5
+
+
 def test_two_stage_dataset_can_be_limited_to_selected_shapes():
     cfg = TwoStageRunConfig(N=2, training_samples=8, validation_samples=4, test_samples=3, grid_size=16)
     dataset = build_two_stage_datasets(cfg, allowed_shape_types=("circle", "rectangle"))
@@ -42,6 +116,34 @@ def test_two_stage_dataset_can_be_limited_to_selected_shapes():
     assert set(dataset.validation.shape_types).issubset({"circle", "rectangle"})
     assert set(dataset.test.shape_types).issubset({"circle", "rectangle"})
     assert set(dataset.fixed.shape_types).issubset({"circle", "rectangle"})
+
+
+def test_one_model_mlp_workflow_constructs_without_decoder_arguments(tmp_path):
+    cfg = OneModelRunConfig(
+        N=2,
+        training_samples=8,
+        validation_samples=4,
+        test_samples=3,
+        grid_size=8,
+        noise_sigma=0.01,
+        output_dir=tmp_path / "one_model_mlp",
+        model=Stage2ModelConfig(
+            hidden_layer_sizes=(16,),
+            dropout_rates=(0.0,),
+            model_type="mlp",
+            training=StageTrainingConfig(
+                epochs=1,
+                batch_size=4,
+                learning_rate=0.001,
+                validation_frequency=1,
+                verbose=False,
+                early_stopping_patience=None,
+            ),
+        ),
+    )
+    summary = run_one_model(cfg, device=torch.device("cpu"))
+    assert summary["model_count"] == 1
+    assert "test" in summary["metrics"]
 
 
 def test_two_stage_dataset_can_bias_training_shapes_only():

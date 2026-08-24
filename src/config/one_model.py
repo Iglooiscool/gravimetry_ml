@@ -23,6 +23,8 @@ class OneModelRunConfig:
     use_validation_threshold_sweep: bool = True
     threshold_candidates: tuple[float, ...] = (0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7)
     noise_sigma: float = 0.01
+    noise_mode: str = "absolute"
+    training_noise_replicas: int = 1
     seed: int = 42
     training_shape_weights: tuple[tuple[str, float], ...] | None = (
         ("rectangle", 0.25),

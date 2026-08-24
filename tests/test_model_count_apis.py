@@ -31,6 +31,10 @@ def test_one_model_config_uses_official_defaults():
     assert config.training_samples == 10_000
     assert config.validation_samples == 2_000
     assert config.model.model_type == "mlp"
+    assert config.model.hidden_layer_sizes == (512, 1024, 2048)
+    assert config.model.dropout_rates == (0.2, 0.2, 0.2)
+    assert config.model.training.loss_type == "mse"
+    assert config.model.use_rectangle_edge_weighting is False
     assert config.output_dir.name == "one_model"
     assert config.training_shape_weights == (
         ("rectangle", 0.25),

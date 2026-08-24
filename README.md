@@ -9,15 +9,16 @@ The reusable code is organized by the number of neural models in the system.
 
 ### One model
 
-The official model maps noisy gradient features directly to mask logits:
+The official model maps noisy gradient features directly to mask logits with an
+MLP:
 
 ```text
 gradient features -> mask
 ```
 
-Its public implementation is in `src/models/one_model/`. The default run uses
-the coordinate-aware convolutional decoder and currently achieves about 0.81
-test IoU and 0.89 fixed-benchmark IoU.
+Its public implementation is in `src/models/one_model/`. The coordinate-aware
+decoder remains available as an experimental reference, but is not the official
+baseline.
 
 ### Two models
 

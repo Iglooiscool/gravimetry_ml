@@ -28,14 +28,14 @@ def _build_stage2_model(run_config):
     stage2_config = run_config.model.stage2
     if stage2_config.model_type == "mlp":
         return Stage2MaskPredictor(
-            input_dim=run_config.coefficient_size,
+            input_dim=run_config.stage2_input_size,
             output_dim=run_config.mask_pixels,
             hidden_dims=stage2_config.hidden_layer_sizes,
             dropout_rates=stage2_config.dropout_rates,
         )
     if stage2_config.model_type == "conv_decoder":
         return Stage2ConvDecoder(
-            input_dim=run_config.coefficient_size,
+            input_dim=run_config.stage2_input_size,
             output_dim=run_config.mask_pixels,
             hidden_dims=stage2_config.hidden_layer_sizes,
             dropout_rates=stage2_config.dropout_rates,
@@ -45,7 +45,7 @@ def _build_stage2_model(run_config):
         )
     if stage2_config.model_type == "coord_conv_decoder":
         return Stage2CoordConvDecoder(
-            input_dim=run_config.coefficient_size,
+            input_dim=run_config.stage2_input_size,
             output_dim=run_config.mask_pixels,
             hidden_dims=stage2_config.hidden_layer_sizes,
             dropout_rates=stage2_config.dropout_rates,
@@ -54,6 +54,14 @@ def _build_stage2_model(run_config):
             decoder_channels=stage2_config.decoder_channels,
         )
     raise ValueError("stage2.model_type must be 'mlp', 'conv_decoder', or 'coord_conv_decoder'")
+
+
+def _build_stage2_features(run_config, coefficient_features: np.ndarray, gradient_features: np.ndarray) -> np.ndarray:
+    """Build Stage 2 inputs, optionally retaining the raw gradient skip path."""
+
+    if run_config.stage2_include_gradient_features:
+        return np.concatenate((coefficient_features, gradient_features), axis=1).astype(np.float32)
+    return coefficient_features
 
 
 def _augment_rectangle_training_rows(train_features, train_masks, train_shape_types, copies: int):
@@ -124,17 +132,50 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
     stage2_model = _build_stage2_model(run_config)
     stage2_training = run_config.model.stage2.training
     rectangle_augmentation_copies = 2 if run_config.model.stage2.use_rectangle_edge_weighting else 0
-    augmented_train_features, augmented_train_masks, augmented_train_shape_types, rectangle_augmentation_added = _augment_rectangle_training_rows(
+    base_stage2_train_features = _build_stage2_features(
+        run_config,
         predicted_train_coefficients,
+        dataset_bundle.train.gradient_data,
+    )
+    augmented_train_features, augmented_train_masks, augmented_train_shape_types, rectangle_augmentation_added = _augment_rectangle_training_rows(
+        base_stage2_train_features,
         dataset_bundle.train.masks,
         dataset_bundle.train.shape_types,
         rectangle_augmentation_copies,
+    )
+    coefficient_augmentation_copies = run_config.stage2_predicted_coefficient_augmentation_copies
+    if coefficient_augmentation_copies > 0:
+        coefficient_errors = predicted_train_coefficients - dataset_bundle.train.coefficients
+        coefficient_error_std = np.maximum(np.std(coefficient_errors, axis=0), 1e-8)
+        coefficient_rng = np.random.default_rng(run_config.seed + 2000)
+        augmented_feature_rows = [augmented_train_features]
+        augmented_mask_rows = [augmented_train_masks]
+        augmented_shape_rows = [augmented_train_shape_types]
+        for _ in range(coefficient_augmentation_copies):
+            perturbations = coefficient_rng.normal(
+                0.0,
+                coefficient_error_std * run_config.stage2_predicted_coefficient_noise_scale,
+                size=predicted_train_coefficients.shape,
+            ).astype(np.float32)
+            augmented_coefficients = predicted_train_coefficients + perturbations
+            augmented_feature_rows.append(
+                _build_stage2_features(run_config, augmented_coefficients, dataset_bundle.train.gradient_data)
+            )
+            augmented_mask_rows.append(dataset_bundle.train.masks)
+            augmented_shape_rows.append(dataset_bundle.train.shape_types)
+        augmented_train_features = np.concatenate(augmented_feature_rows, axis=0)
+        augmented_train_masks = np.concatenate(augmented_mask_rows, axis=0)
+        augmented_train_shape_types = tuple(shape_type for rows in augmented_shape_rows for shape_type in rows)
+    stage2_validation_features = _build_stage2_features(
+        run_config,
+        predicted_validation_coefficients,
+        dataset_bundle.validation.gradient_data,
     )
     stage2_history = fit_stage2_model(
         model=stage2_model,
         train_features=augmented_train_features,
         train_targets=augmented_train_masks,
-        val_features=predicted_validation_coefficients,
+        val_features=stage2_validation_features,
         val_targets=dataset_bundle.validation.masks,
         epochs=stage2_training.epochs,
         batch_size=stage2_training.batch_size,
@@ -163,11 +204,31 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
         use_foreground_pos_weight=run_config.model.stage2.use_foreground_pos_weight,
     )
 
-    predicted_test_masks = predict_stage2_logits(stage2_model, predicted_test_coefficients, device=device, training_result=stage2_history)
-    predicted_validation_masks = predict_stage2_logits(stage2_model, predicted_validation_coefficients, device=device, training_result=stage2_history)
-    predicted_fixed_masks = predict_stage2_logits(stage2_model, predicted_fixed_coefficients, device=device, training_result=stage2_history)
-    predicted_test_masks_with_true_coefficients = predict_stage2_logits(stage2_model, dataset_bundle.test.coefficients, device=device, training_result=stage2_history)
-    predicted_fixed_masks_with_true_coefficients = predict_stage2_logits(stage2_model, dataset_bundle.fixed.coefficients, device=device, training_result=stage2_history)
+    stage2_test_features = _build_stage2_features(
+        run_config,
+        predicted_test_coefficients,
+        dataset_bundle.test.gradient_data,
+    )
+    stage2_fixed_features = _build_stage2_features(
+        run_config,
+        predicted_fixed_coefficients,
+        dataset_bundle.fixed.gradient_data,
+    )
+    stage2_test_true_coefficient_features = _build_stage2_features(
+        run_config,
+        dataset_bundle.test.coefficients,
+        dataset_bundle.test.gradient_data,
+    )
+    stage2_fixed_true_coefficient_features = _build_stage2_features(
+        run_config,
+        dataset_bundle.fixed.coefficients,
+        dataset_bundle.fixed.gradient_data,
+    )
+    predicted_test_masks = predict_stage2_logits(stage2_model, stage2_test_features, device=device, training_result=stage2_history)
+    predicted_validation_masks = predict_stage2_logits(stage2_model, stage2_validation_features, device=device, training_result=stage2_history)
+    predicted_fixed_masks = predict_stage2_logits(stage2_model, stage2_fixed_features, device=device, training_result=stage2_history)
+    predicted_test_masks_with_true_coefficients = predict_stage2_logits(stage2_model, stage2_test_true_coefficient_features, device=device, training_result=stage2_history)
+    predicted_fixed_masks_with_true_coefficients = predict_stage2_logits(stage2_model, stage2_fixed_true_coefficient_features, device=device, training_result=stage2_history)
 
     threshold_used, threshold_summary = select_stage2_threshold(
         run_config,
@@ -198,6 +259,9 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
     training_summary = {
         "stage1": summarize_training_history(stage1_history.history, stage1_training.epochs),
         "stage2": summarize_training_history(stage2_history.history, stage2_training.epochs),
+        "stage2_train_input_source": "stage1_predicted_coefficients_plus_raw_gradients" if run_config.stage2_include_gradient_features else "stage1_predicted_coefficients",
+        "stage2_validation_input_source": "stage1_predicted_coefficients_plus_raw_gradients" if run_config.stage2_include_gradient_features else "stage1_predicted_coefficients",
+        "stage2_true_coefficient_input_used_for_training": False,
     }
 
     save_model_weights(stage1_model, stage2_model, run_output_dir)
@@ -219,7 +283,11 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
         threshold_summary,
         stage1_history,
         stage2_history,
-        {**training_summary, "rectangle_augmentation_added": rectangle_augmentation_added},
+        {
+            **training_summary,
+            "rectangle_augmentation_added": rectangle_augmentation_added,
+            "predicted_coefficient_augmentation_copies": coefficient_augmentation_copies,
+        },
     )
     write_run_summary(summary, run_output_dir)
     return summary

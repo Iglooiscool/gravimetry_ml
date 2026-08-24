@@ -36,6 +36,7 @@ def _build_split(
     fixed_shapes: list[tuple[str, object]] | None = None,
     allowed_shape_types: tuple[str, ...] | None = None,
     shape_weights_override: tuple[tuple[str, float], ...] | None = None,
+    add_noise: bool = False,
 ) -> TwoStageDatasetSplit:
     grid_data = create_grid(GridSpec(grid_size=run_config.grid_size))
     gradient_rows: list[np.ndarray] = []
@@ -66,14 +67,27 @@ def _build_split(
 
     if not shape_entries:
         raise ValueError("No shapes available for the requested allowed_shape_types selection")
+    if add_noise and run_config.training_noise_replicas < 1:
+        raise ValueError("training_noise_replicas must be at least 1")
+    if add_noise and run_config.training_noise_replicas > 1:
+        shape_entries = shape_entries * run_config.training_noise_replicas
 
     for display_name, shape in shape_entries:
         mask = shape.compute_mask(grid_data.X, grid_data.Y)
         coefficient_values = compute_coefficients(mask, grid_data.X, grid_data.Y, grid_data.dA, n_max=run_config.N).coefficients
         gradient_values = compute_gradient_data(coefficient_values, gradient_measurement_points, run_config.N)
-        noisy_gradient_values = add_gaussian_noise(gradient_values, run_config.noise_sigma, random_generator)
+        measured_gradient_values = (
+            add_gaussian_noise(
+                gradient_values,
+                run_config.noise_sigma,
+                random_generator,
+                mode=run_config.noise_mode,
+            )
+            if add_noise
+            else gradient_values
+        )
 
-        gradient_rows.append(measurements_to_feature_vector(noisy_gradient_values))
+        gradient_rows.append(measurements_to_feature_vector(measured_gradient_values))
         coefficient_rows.append(coefficients_to_feature_vector(coefficient_values))
         mask_rows.append(mask.astype(np.float32).reshape(-1))
         shape_type_rows.append(shape.type)
@@ -110,6 +124,7 @@ def build_two_stage_datasets(
             sampling_settings,
             allowed_shape_types=allowed_shape_types,
             shape_weights_override=run_config.training_shape_weights,
+            add_noise=True,
         ),
         validation=_build_split(
             run_config.validation_samples,
@@ -118,6 +133,7 @@ def build_two_stage_datasets(
             measurement_matrix,
             sampling_settings,
             allowed_shape_types=allowed_shape_types,
+            add_noise=False,
         ),
         test=_build_split(
             run_config.test_samples,
@@ -126,6 +142,7 @@ def build_two_stage_datasets(
             measurement_matrix,
             sampling_settings,
             allowed_shape_types=allowed_shape_types,
+            add_noise=False,
         ),
         fixed=_build_split(
             len(fixed_shapes),
@@ -135,6 +152,7 @@ def build_two_stage_datasets(
             sampling_settings,
             fixed_shapes=fixed_shapes,
             allowed_shape_types=allowed_shape_types,
+            add_noise=False,
         ),
         measurement_points=measurement_points,
         measurement_matrix=measurement_matrix,

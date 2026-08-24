@@ -94,6 +94,7 @@ class Task9RunConfig:
     use_validation_threshold_sweep: bool = False
     threshold_candidates: tuple[float, ...] = (0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)
     noise_sigma: float = 0.01
+    noise_mode: str = "absolute"
     seed: int = 42
     model: Task9StackConfig = field(default_factory=Task9StackConfig)
     output_dir: Path = Path("outputs/three_models")
@@ -147,6 +148,7 @@ class Task9SweepConfig:
     use_validation_threshold_sweep: bool = False
     threshold_candidates: tuple[float, ...] = (0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)
     noise_sigma: float = 0.01
+    noise_mode: str = "absolute"
     seed: int = 42
     model: Task9StackConfig = field(default_factory=Task9StackConfig)
     output_dir: Path = Path("outputs/three_models")
@@ -173,6 +175,7 @@ class Task9SweepConfig:
                     use_validation_threshold_sweep=self.use_validation_threshold_sweep,
                     threshold_candidates=self.threshold_candidates,
                     noise_sigma=self.noise_sigma,
+                    noise_mode=self.noise_mode,
                     seed=self.seed + index,
                     model=self.model,
                     output_dir=self.output_dir,

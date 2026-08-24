@@ -41,3 +41,16 @@ def test_zero_noise_returns_the_input():
 def test_negative_sigma_is_rejected():
     with pytest.raises(ValueError, match="sigma"):
         add_gaussian_noise(np.zeros(2), -0.01, np.random.default_rng(6))
+
+
+def test_relative_max_noise_matches_legacy_scale():
+    values = np.array([1.0 + 2.0j, 3.0 + 4.0j], dtype=np.complex128)
+    sigma = 0.01
+    expected_rng = np.random.default_rng(12)
+    scale = 5.0 * sigma
+    expected = values + expected_rng.normal(0.0, scale, size=values.shape)
+    expected += 1j * expected_rng.normal(0.0, scale, size=values.shape)
+
+    actual = add_gaussian_noise(values, sigma, np.random.default_rng(12), mode="relative_max")
+
+    assert np.allclose(actual, expected)

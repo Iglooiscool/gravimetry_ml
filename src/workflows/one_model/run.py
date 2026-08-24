@@ -57,15 +57,21 @@ def run_one_model(run_config, device: torch.device | None = None) -> dict[str, o
     dataset = build_two_stage_datasets(run_config)
     dataset_paths = save_two_stage_dataset(dataset, output_dir / "datasets")
     model_class = GradientToMaskMLP if run_config.model.model_type == "mlp" else GradientToMaskModel
-    model = model_class(
-        input_dim=run_config.gradient_feature_size,
-        output_dim=run_config.mask_pixels,
-        hidden_dims=run_config.model.hidden_layer_sizes,
-        dropout_rates=run_config.model.dropout_rates,
-        latent_grid_size=run_config.model.latent_grid_size,
-        latent_channels=run_config.model.latent_channels,
-        decoder_channels=run_config.model.decoder_channels,
-    )
+    model_kwargs = {
+        "input_dim": run_config.gradient_feature_size,
+        "output_dim": run_config.mask_pixels,
+        "hidden_dims": run_config.model.hidden_layer_sizes,
+        "dropout_rates": run_config.model.dropout_rates,
+    }
+    if model_class is GradientToMaskModel:
+        model_kwargs.update(
+            {
+                "latent_grid_size": run_config.model.latent_grid_size,
+                "latent_channels": run_config.model.latent_channels,
+                "decoder_channels": run_config.model.decoder_channels,
+            }
+        )
+    model = model_class(**model_kwargs)
     training_options = _training_options(run_config, device)
     training_options["train_shape_types"] = dataset.train.shape_types
     training_result = fit_one_model(
