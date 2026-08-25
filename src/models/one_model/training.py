@@ -77,6 +77,7 @@ def fit_multitask_one_model(
     loss_type: str = "bce_dice",
     dice_loss_weight: float = 1.0,
     dice_smooth: float = 1.0,
+    iou_loss_weight: float = 0.0,
 ) -> ModelTrainingResult:
     """Train shared mask and coefficient heads with a combined objective."""
 
@@ -124,6 +125,7 @@ def fit_multitask_one_model(
         loss_type=loss_type,
         dice_loss_weight=dice_loss_weight,
         dice_smooth=dice_smooth,
+        iou_loss_weight=iou_loss_weight,
     )
     coefficient_criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)

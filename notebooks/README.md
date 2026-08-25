@@ -1,15 +1,17 @@
-# Experiment Notebooks
+# Active Experiment Notebooks
 
-## Final Showcases
+Exactly five notebooks are maintained here. Historical educational, scratch,
+and diagnostic notebooks are preserved under `notebooks_archive/`.
 
-The final notebooks all use the Task 7 sweep (`N=2,4,6,8,10`) and absolute
-Gaussian noise with `sigma=0.001` on training gradients only. Validation,
-random test, and fixed test gradients remain clean.
+- `00_project_notes_and_methodology.ipynb`: problem, data, noise, splits, and metrics.
+- `01_one_stage_pipeline.ipynb`: selected direct gradient-to-mask pipeline.
+- `02_two_stage_pipeline.ipynb`: coefficient prediction followed by mask reconstruction.
+- `03_three_stage_pipeline.ipynb`: experimental general/specialist workflow and routing limitation.
+- `04_one_stage_annulus_router.ipynb`: standalone learned annulus-specialist one-stage candidate.
 
-- `final_one_stage.ipynb`: direct gradient-to-mask MLP.
-- `final_two_stage.ipynb`: connected gradient-to-coefficient-to-mask workflow.
-- `final_three_stage.ipynb`: Task 8 Stage 1 plus the Task 9 general and specialist stages.
+The previous reporting and sampling ablation notebooks remain under
+`notebooks_archive/`.
 
-The previous `Old Noise` and `New Noise` experiment folders were exploratory
-and have been removed. Task 1 through Task 9 educational notebooks remain in
-their original folders.
+All active notebooks use clean validation/test data for the official metric.
+Their supplementary robustness curves evaluate a fixed model at test noise
+levels `0.0`, `0.001`, `0.0025`, `0.005`, and `0.01`.

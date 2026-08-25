@@ -8,7 +8,7 @@ from torch.nn import functional as F
 
 
 class WeightedBinaryMaskLoss(nn.Module):
-    """Stage 2 BCE, BCE+Dice, or MSE loss with optional per-pixel weights."""
+    """Stage 2 mask losses with optional per-pixel weights."""
 
     def __init__(
         self,
@@ -16,17 +16,19 @@ class WeightedBinaryMaskLoss(nn.Module):
         loss_type: str = "bce",
         dice_loss_weight: float = 0.0,
         dice_smooth: float = 1.0,
+        iou_loss_weight: float = 0.0,
     ):
         super().__init__()
         if pos_weight is not None:
             self.register_buffer("pos_weight", pos_weight)
         else:
             self.pos_weight = None
-        if loss_type not in {"bce", "bce_dice", "mse"}:
-            raise ValueError("loss_type must be 'bce', 'bce_dice', or 'mse'")
+        if loss_type not in {"bce", "bce_dice", "bce_dice_iou", "mse"}:
+            raise ValueError("loss_type must be 'bce', 'bce_dice', 'bce_dice_iou', or 'mse'")
         self.loss_type = loss_type
         self.dice_loss_weight = float(dice_loss_weight)
         self.dice_smooth = float(dice_smooth)
+        self.iou_loss_weight = float(iou_loss_weight)
 
     def _compute_dice_loss(
         self,
@@ -43,6 +45,22 @@ class WeightedBinaryMaskLoss(nn.Module):
             denominator = probabilities.sum(dim=1) + targets.sum(dim=1)
         dice_score = (2.0 * intersection + self.dice_smooth) / (denominator + self.dice_smooth)
         return 1.0 - dice_score.mean()
+
+    def _compute_iou_loss(
+        self,
+        predictions: torch.Tensor,
+        targets: torch.Tensor,
+        pixel_weights: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        probabilities = torch.sigmoid(predictions)
+        if pixel_weights is not None:
+            intersection = (pixel_weights * probabilities * targets).sum(dim=1)
+            union = (pixel_weights * (probabilities + targets - probabilities * targets)).sum(dim=1)
+        else:
+            intersection = (probabilities * targets).sum(dim=1)
+            union = (probabilities + targets - probabilities * targets).sum(dim=1)
+        iou_score = (intersection + self.dice_smooth) / (union + self.dice_smooth)
+        return 1.0 - iou_score.mean()
 
     def forward(
         self,
@@ -69,7 +87,12 @@ class WeightedBinaryMaskLoss(nn.Module):
         if self.loss_type == "bce":
             return bce_loss
         dice_loss = self._compute_dice_loss(predictions, targets, pixel_weights)
-        return bce_loss + self.dice_loss_weight * dice_loss
+        total_loss = bce_loss + self.dice_loss_weight * dice_loss
+        if self.loss_type == "bce_dice_iou":
+            total_loss = total_loss + self.iou_loss_weight * self._compute_iou_loss(
+                predictions, targets, pixel_weights
+            )
+        return total_loss
 
 
 class SigmoidMSEMaskLoss(nn.Module):

@@ -201,6 +201,7 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
         loss_type=stage2_training.loss_type,
         dice_loss_weight=stage2_training.dice_loss_weight,
         dice_smooth=stage2_training.dice_smooth,
+        iou_loss_weight=stage2_training.iou_loss_weight,
         use_foreground_pos_weight=run_config.model.stage2.use_foreground_pos_weight,
     )
 
@@ -288,6 +289,16 @@ def run_two_stage_once(run_config, device: torch.device | None = None) -> dict[s
             "rectangle_augmentation_added": rectangle_augmentation_added,
             "predicted_coefficient_augmentation_copies": coefficient_augmentation_copies,
         },
+    )
+    summary.update(
+        {
+            "stage1_input_mean": stage1_history.input_mean.tolist() if stage1_history.input_mean is not None else None,
+            "stage1_input_std": stage1_history.input_std.tolist() if stage1_history.input_std is not None else None,
+            "stage1_target_mean": stage1_history.target_mean.tolist() if stage1_history.target_mean is not None else None,
+            "stage1_target_std": stage1_history.target_std.tolist() if stage1_history.target_std is not None else None,
+            "stage2_input_mean": stage2_history.input_mean.tolist() if stage2_history.input_mean is not None else None,
+            "stage2_input_std": stage2_history.input_std.tolist() if stage2_history.input_std is not None else None,
+        }
     )
     write_run_summary(summary, run_output_dir)
     return summary

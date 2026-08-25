@@ -9,16 +9,15 @@ The reusable code is organized by the number of neural models in the system.
 
 ### One model
 
-The official model maps noisy gradient features directly to mask logits with an
-MLP:
+The selected one-stage model maps gradient features directly to mask logits with
+a coordinate-aware decoder:
 
 ```text
 gradient features -> mask
 ```
 
-Its public implementation is in `src/models/one_model/`. The coordinate-aware
-decoder remains available as an experimental reference, but is not the official
-baseline.
+Its public implementation is in `src/models/one_model/`. A flat MLP remains
+available as a baseline in the experimental notebook.
 
 ### Two models
 
@@ -88,8 +87,32 @@ Run the experimental three-model workflow:
 python src/main.py run --model-count 3 --coefficient-order 8 --train-samples 4000 --validation-samples 1000
 ```
 
-Generated artifacts are written to `outputs/one_model/`, `outputs/two_models/`,
-or `outputs/three_models/`, depending on the workflow.
+Historical artifacts remain under `outputs/`. The five active notebooks write
+new, traceable artifacts under `output/`.
+
+Noise-sweep artifacts are organized by training and test noise:
+
+```text
+output/one_stage/train_sigma001/test_sigma005/metrics.csv
+output/two_stage/train_sigma001/test_sigma005/metrics_by_shape.csv
+```
+
+The active model notebooks compare training sigma values `0.0`, `0.001`,
+`0.0025`, `0.005`, and `0.01`, then evaluate each trained model at the same
+five test sigma values.
+
+## Active Notebooks
+
+The active notebook set is intentionally limited to five documented workflows:
+
+- `00_project_notes_and_methodology.ipynb`
+- `01_one_stage_pipeline.ipynb`
+- `02_two_stage_pipeline.ipynb`
+- `03_three_stage_pipeline.ipynb`
+- `04_one_stage_annulus_router.ipynb`
+
+Earlier educational and scratch notebooks are preserved under
+`notebooks_archive/`.
 
 ## Development
 

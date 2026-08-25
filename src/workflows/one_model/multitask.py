@@ -66,6 +66,7 @@ def run_multitask_one_model(run_config, coefficient_loss_weight: float = 0.1, de
         loss_type=training.loss_type,
         dice_loss_weight=training.dice_loss_weight,
         dice_smooth=training.dice_smooth,
+        iou_loss_weight=training.iou_loss_weight,
     )
     validation_logits, validation_coefficients = predict_multitask_one_model(model, dataset.validation.gradient_data, device, training_result)
     test_logits, test_coefficients = predict_multitask_one_model(model, dataset.test.gradient_data, device, training_result)

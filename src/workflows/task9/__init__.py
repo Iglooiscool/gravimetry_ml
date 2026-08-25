@@ -2,7 +2,7 @@
 
 from .config import Task9RunConfig, Task9SweepConfig
 from .datasets import build_task9_general_dataset, build_task9_specialist_dataset
-from .run import run_task9_once, run_task9_sweep
+from .run import run_task9_once, run_task9_once_with_predictor, run_task9_sweep
 
 __all__ = [
     "Task9RunConfig",
@@ -10,5 +10,6 @@ __all__ = [
     "build_task9_general_dataset",
     "build_task9_specialist_dataset",
     "run_task9_once",
+    "run_task9_once_with_predictor",
     "run_task9_sweep",
 ]

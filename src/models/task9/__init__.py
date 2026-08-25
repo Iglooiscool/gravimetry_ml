@@ -4,6 +4,7 @@ from .combined import Task9CombinedModel, Task9TrainedHead, combine_task9_logits
 from .general_mlp import Task9GeneralMaskMLP
 from .specialist_mlp import Task9TwoCircleSpecialistMLP
 from .train import train_task9_head
+from .router import Task9CoefficientRouter, fit_task9_router, predict_task9_router
 
 __all__ = [
     "Task9GeneralMaskMLP",
@@ -14,4 +15,7 @@ __all__ = [
     "combine_task9_logits",
     "predict_task9_combined_logits",
     "train_task9_head",
+    "Task9CoefficientRouter",
+    "fit_task9_router",
+    "predict_task9_router",
 ]

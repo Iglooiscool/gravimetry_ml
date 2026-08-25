@@ -75,7 +75,7 @@ class Task9StackConfig:
     enable_specialist: bool = True
     specialist_min_n: int = 4
     specialist_shape_type: str = "two_circles"
-    routing_mode: str = "true_shape_type"
+    routing_mode: str = "predicted_router"
 
 
 @dataclass(frozen=True)

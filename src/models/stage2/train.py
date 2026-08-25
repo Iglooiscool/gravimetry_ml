@@ -188,6 +188,7 @@ def fit_stage2_model(
     loss_type: str = "bce",
     dice_loss_weight: float = 0.0,
     dice_smooth: float = 1.0,
+    iou_loss_weight: float = 0.0,
     use_foreground_pos_weight: bool = True,
 ) -> ModelTrainingResult:
     """Train Stage 2 with BCE-with-logits on normalized coefficient inputs."""
@@ -234,6 +235,7 @@ def fit_stage2_model(
             loss_type=loss_type,
             dice_loss_weight=dice_loss_weight,
             dice_smooth=dice_smooth,
+            iou_loss_weight=iou_loss_weight,
         ),
         device=device,
         validation_frequency=validation_frequency,

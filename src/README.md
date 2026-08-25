@@ -19,3 +19,7 @@ Stable public entry points for the three final showcases:
 The existing `models`, `workflows`, `measurements`, and `shapes` packages remain
 the tested implementation layer while the final notebooks use the explicit
 `final_models` interface.
+
+The `experiments` package contains shared notebook utilities for checkpoint
+loading, model introspection, test-time noise sweeps, and CSV/JSON artifact
+export. It does not alter the official training-only noise protocol.

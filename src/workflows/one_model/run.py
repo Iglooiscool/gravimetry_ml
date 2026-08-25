@@ -42,6 +42,7 @@ def _training_options(run_config, device: torch.device) -> dict[str, object]:
         "loss_type": training.loss_type,
         "dice_loss_weight": training.dice_loss_weight,
         "dice_smooth": training.dice_smooth,
+        "iou_loss_weight": training.iou_loss_weight,
         "use_foreground_pos_weight": run_config.model.use_foreground_pos_weight,
     }
 
@@ -117,6 +118,8 @@ def run_one_model(run_config, device: torch.device | None = None) -> dict[str, o
         "threshold_summary": threshold_summary,
         "dataset_paths": {key: str(value) for key, value in dataset_paths.items()},
         "training_history": training_result.history,
+        "training_input_mean": training_result.input_mean.tolist() if training_result.input_mean is not None else None,
+        "training_input_std": training_result.input_std.tolist() if training_result.input_std is not None else None,
     }
     with (output_dir / "summary.json").open("w", encoding="utf-8") as summary_file:
         json.dump(summary, summary_file, indent=2)
