@@ -1,154 +1,133 @@
 # minimal-gravimetry-ml
 
-This project reconstructs simple binary shapes from a small number of noisy boundary measurements.
+This project reconstructs simple binary shapes from a small number of noisy
+boundary measurements.
 
-The main idea is a two-stage PyTorch pipeline:
+## Model Versions
 
-1. Stage 1 takes gradient-based boundary data and predicts shape coefficients.
-2. Stage 2 takes those coefficients and predicts a binary mask of the shape.
+The reusable code is organized by the number of neural models in the system.
 
-## What is in this repo
+### One model
 
-- `docs/tasks/` holds the task PDFs that define the project steps.
-- `notebooks/` holds task notebooks that explain the ideas and show experiments.
-- `src/` holds the real reusable code.
-- `tests/` holds automated checks for the reusable code.
+The selected one-stage model maps gradient features directly to mask logits with
+a coordinate-aware decoder:
 
-## How the code is organized
+```text
+gradient features -> mask
+```
 
-The real code lives in `src/`.
+Its public implementation is in `src/models/one_model/`. A flat MLP remains
+available as a baseline in the experimental notebook.
 
-### Main entry points
+### Two models
 
-- `src/main.py`
-  Runs the project from the command line.
+The reference two-model system separates coefficient prediction from mask
+reconstruction:
 
-- `src/pipeline.py`
-  Runs one experiment or a full sweep in Python code.
+```text
+gradient features -> coefficients -> mask
+```
 
-### Config
+Its public implementation is in `src/models/two_models/`.
 
-- `src/config/models.py`
-  Model layout settings such as hidden layer sizes and dropout.
+### Three models
 
-- `src/config/runs.py`
-  Run settings such as sample counts, epochs, learning rate, and output folders.
+The experimental three-model system contains a coefficient model, a general
+mask model, and a two-circle specialist mask model:
 
-### Shapes
+```text
+gradient features -> coefficients -> general or specialist mask
+```
 
-- `src/shapes/base.py`
-  Base shape type shared by all shapes.
+Its public implementation is in `src/models/three_models/`. Specialist routing
+is experimental and is not the official model path.
 
-- `src/shapes/shapes.py`
-  Concrete shapes, fixed benchmark shapes, and random shape sampling.
-
-### Measurements and math
-
-- `src/measurements.py`
-  Grid creation, coefficient computation, unit-circle measurement points, gradient data, measurement matrix, and Gaussian noise.
-
-### Models
-
-- `src/models/two_stage.py`
-  Stage 1 and Stage 2 network definitions.
-
-- `src/models/training.py`
-  Training loops, normalization helpers, early stopping, and prediction helpers.
-
-- `src/models/metrics.py`
-  MSE, MAE, IoU, and evaluation helpers.
-
-### Data and outputs
-
-- `src/datasets.py`
-  Synthetic dataset generation for train, validation, test, and fixed benchmark splits.
-
-- `src/plotting.py`
-  Plots and JSON summary writers.
-
-## Repository layout
+## Repository Layout
 
 ```text
 minimal-gravimetry-ml/
-  docs/
-  notebooks/
-  outputs/
+  notebooks/              Educational and reference notebooks
   src/
-    __init__.py
-    main.py
-    measurements.py
-    datasets.py
-    pipeline.py
-    plotting.py
-    config/
-      __init__.py
-      models.py
-      runs.py
-    shapes/
-      __init__.py
-      base.py
-      shapes.py
+    config/               Model-count and training configuration
+    datasets/             Synthetic dataset generation and persistence
+    measurements/         Measurement and coefficient calculations
     models/
-      __init__.py
-      two_stage.py
-      training.py
-      metrics.py
-  tests/
-  .dockerignore
-  .gitignore
-  docker-compose.yml
-  Dockerfile
-  pyproject.toml
+      shared/             Reusable training, loss, and normalization logic
+      one_model/          Official direct gradient-to-mask model
+      two_models/         Coefficient model plus mask model
+      three_models/       General and specialist mask models
+      stage1/             Low-level compatibility component
+      stage2/             Low-level decoder and mask-training component
+      task9/              Low-level compatibility component for three models
+    workflows/
+      one_model/          Official workflow
+      three_models/       Experimental three-model workflow
+      task9/              Existing implementation used by three_models
+    main.py               Command-line entry point
+  tests/                  Automated checks
 ```
 
-## Running the project
+## Running Models
 
-Run one experiment from the command line:
+Run the official one-model workflow:
 
 ```bash
-python src/main.py run --N 8 --train-samples 4000 --validation-samples 1000
+python src/main.py run --model-count 1 --coefficient-order 8 --train-samples 10000 --validation-samples 2000
 ```
 
-Run a sweep:
+Run the two-model reference workflow:
 
 ```bash
-python src/main.py sweep
+python src/main.py run --model-count 2 --coefficient-order 8 --train-samples 4000 --validation-samples 1000
 ```
 
-If you want to work through the project step by step, open the notebooks in `notebooks/` instead.
-
-## Docker-only setup
-
-Build image:
+Run the experimental three-model workflow:
 
 ```bash
-docker compose build
+python src/main.py run --model-count 3 --coefficient-order 8 --train-samples 4000 --validation-samples 1000
 ```
 
-Start Jupyter Lab:
+Historical artifacts remain under `outputs/`. The five active notebooks write
+new, traceable artifacts under `output/`.
 
-```bash
-docker compose up
-```
-
-Open in browser:
+Noise-sweep artifacts are organized by training and test noise:
 
 ```text
-http://localhost:8888
+output/one_stage/train_sigma001/test_sigma005/metrics.csv
+output/two_stage/train_sigma001/test_sigma005/metrics_by_shape.csv
 ```
 
-Stop services:
+The active model notebooks compare training sigma values `0.0`, `0.001`,
+`0.0025`, `0.005`, and `0.01`, then evaluate each trained model at the same
+five test sigma values.
+
+## Active Notebooks
+
+The active notebook set is intentionally limited to five documented workflows:
+
+- `00_project_notes_and_methodology.ipynb`
+- `01_one_stage_pipeline.ipynb`
+- `02_two_stage_pipeline.ipynb`
+- `03_three_stage_pipeline.ipynb`
+- `04_one_stage_annulus_router.ipynb`
+
+Earlier educational and scratch notebooks are preserved under
+`notebooks_archive/`.
+
+## Development
+
+The shared synthetic-data noise model follows Tasks 5, 7, and 8: Gaussian
+noise is added independently to the real and imaginary parts of the clean
+gradient, with `noise_sigma` as the absolute standard deviation. Noise is not
+scaled by the signal magnitude.
+
+Install development dependencies, then run:
 
 ```bash
-docker compose down
+pytest
+ruff check
+python -m compileall src
 ```
 
-Notes:
-
-- The container runs Jupyter Lab with no token/password for local development convenience.
-- Keep this setup for local machine use only.
-
-## Development note
-
-- Tests add `src/` to `sys.path`, so the source files and folders can be imported directly.
-- Task 8 now defines the real Stage 1 setup used by the reusable code: gradient data goes into the DNN, not the older measurement-only path.
+The tests add `src/` to `sys.path`, so the source packages can be imported
+directly during local development.

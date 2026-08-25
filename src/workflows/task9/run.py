@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 import torch
+import numpy as np
 
 from datasets import save_two_stage_dataset
 from models import Stage1Regressor, predict_stage1_coefficients, set_torch_seed
-from models.task9 import Task9CombinedModel, Task9GeneralMaskMLP, Task9TwoCircleSpecialistMLP, predict_task9_combined_logits, train_task9_head
+from models.task9 import (
+    Task9CoefficientRouter,
+    Task9CombinedModel,
+    Task9GeneralMaskMLP,
+    Task9TrainedHead,
+    Task9TwoCircleSpecialistMLP,
+    fit_task9_router,
+    predict_task9_combined_logits,
+    train_task9_head,
+)
 from plotting import save_two_stage_summary
 
 from .artifacts import build_task9_summary, save_task9_figures, save_task9_model_weights, write_task9_summary
@@ -41,7 +51,11 @@ def _train_stage1_model(run_config, dataset_bundle, device):
     return stage1_model, training_result
 
 
-def run_task9_once(run_config, device: torch.device | None = None) -> dict[str, object]:
+def run_task9_once(
+    run_config,
+    device: torch.device | None = None,
+    return_predictor: bool = False,
+) -> dict[str, object] | tuple[dict[str, object], object]:
     """Run one full Task 9 experiment and save its outputs."""
 
     run_output_dir = run_config.run_output_dir
@@ -111,11 +125,34 @@ def run_task9_once(run_config, device: torch.device | None = None) -> dict[str, 
             training_config=run_config.model.specialist.training,
         )
 
+    router_model = Task9CoefficientRouter(run_config.coefficient_size)
+    router_labels = np.asarray(
+        [shape_type == run_config.model.specialist_shape_type for shape_type in general_dataset.train.shape_types],
+        dtype=np.float32,
+    )
+    router_validation_labels = np.asarray(
+        [shape_type == run_config.model.specialist_shape_type for shape_type in general_dataset.validation.shape_types],
+        dtype=np.float32,
+    )
+    router_result = fit_task9_router(
+        router_model,
+        predicted_train_coefficients,
+        router_labels,
+        predicted_validation_coefficients,
+        router_validation_labels,
+        epochs=80,
+        batch_size=64,
+        learning_rate=0.001,
+        device=device,
+    )
+    router_head = Task9TrainedHead("task9_router", router_model, router_result)
+
     combined_model = Task9CombinedModel(
         general=general_head,
         specialist=specialist_head,
         specialist_shape_type=run_config.model.specialist_shape_type,
         routing_mode=run_config.model.routing_mode,
+        router=router_head,
     )
 
     from models.stage2.train import predict_stage2_logits
@@ -166,7 +203,7 @@ def run_task9_once(run_config, device: torch.device | None = None) -> dict[str, 
     )
     training_summary = build_task9_training_summary(stage1_result, general_head.training_result, specialist_head.training_result if specialist_head is not None else None, run_config)
 
-    model_paths = save_task9_model_weights(stage1_model, general_head, specialist_head, run_output_dir)
+    model_paths = save_task9_model_weights(stage1_model, general_head, specialist_head, run_output_dir, router_head)
     figure_paths = save_task9_figures(
         run_config,
         general_dataset,
@@ -190,7 +227,30 @@ def run_task9_once(run_config, device: torch.device | None = None) -> dict[str, 
         threshold_summary,
     )
     write_task9_summary(summary, run_output_dir)
+    if return_predictor:
+        def predict_test_logits(features):
+            predicted_coefficients = predict_stage1_coefficients(
+                stage1_model,
+                features,
+                device=device,
+                training_result=stage1_result,
+            )
+            logits, _ = predict_task9_combined_logits(
+                combined_model,
+                predicted_coefficients,
+                general_dataset.test.shape_types,
+                device,
+            )
+            return logits
+
+        return summary, predict_test_logits
     return summary
+
+
+def run_task9_once_with_predictor(run_config, device: torch.device | None = None):
+    """Run Task 9 and return a live oracle-routed test predictor for diagnostics."""
+
+    return run_task9_once(run_config, device=device, return_predictor=True)
 
 
 def run_task9_sweep(sweep_config, device: torch.device | None = None) -> dict[str, object]:
@@ -213,4 +273,4 @@ def run_task9_sweep(sweep_config, device: torch.device | None = None) -> dict[st
     return summary
 
 
-__all__ = ["run_task9_once", "run_task9_sweep"]
+__all__ = ["run_task9_once", "run_task9_once_with_predictor", "run_task9_sweep"]

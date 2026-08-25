@@ -14,7 +14,7 @@ from plotting import save_measurement_points_plot, save_reconstruction_examples,
 from shapes import create_fixed_benchmark_shapes
 
 
-def save_task9_model_weights(stage1_model, general_head, specialist_head, run_output_dir) -> dict[str, str]:
+def save_task9_model_weights(stage1_model, general_head, specialist_head, run_output_dir, router_head=None) -> dict[str, str]:
     """Persist trained Task 9 model weights and return their paths."""
 
     model_paths = {
@@ -26,6 +26,9 @@ def save_task9_model_weights(stage1_model, general_head, specialist_head, run_ou
     if specialist_head is not None:
         model_paths["task9_specialist"] = str(run_output_dir / "task9_specialist_model.pt")
         torch.save(specialist_head.model.state_dict(), model_paths["task9_specialist"])
+    if router_head is not None:
+        model_paths["task9_router"] = str(run_output_dir / "task9_router_model.pt")
+        torch.save(router_head.model.state_dict(), model_paths["task9_router"])
     return model_paths
 
 

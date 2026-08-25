@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import numpy as np
+
 from models import evaluate_stage2_predictions
 
 
@@ -51,4 +53,25 @@ def build_stage2_diagnostics(
     }
 
 
-__all__ = ["build_stage2_diagnostics", "summarize_training_history"]
+def build_annulus_center_diagnostics(predicted_logits, predicted_true_coeff_logits, fixed_names, grid_size: int) -> dict[str, dict[str, float]]:
+    """Summarize how confidently the fixed annulus center is being suppressed."""
+
+    annulus_index = fixed_names.index("Annulus (R=0.7, r=0.3)")
+    center_slice = slice(grid_size // 2 - 4, grid_size // 2 + 4)
+
+    def _summarize(logits) -> dict[str, float]:
+        probabilities = 1.0 / (1.0 + np.exp(-logits[annulus_index].reshape(grid_size, grid_size)))
+        center = probabilities[center_slice, center_slice]
+        return {
+            "center_mean_probability": float(center.mean()),
+            "center_max_probability": float(center.max()),
+            "center_min_probability": float(center.min()),
+        }
+
+    return {
+        "predicted_coefficients": _summarize(predicted_logits),
+        "true_coefficients": _summarize(predicted_true_coeff_logits),
+    }
+
+
+__all__ = ["build_stage2_diagnostics", "build_annulus_center_diagnostics", "summarize_training_history"]

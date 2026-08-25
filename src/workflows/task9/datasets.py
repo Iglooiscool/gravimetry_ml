@@ -9,7 +9,7 @@ from config.runs import TwoStageRunConfig
 from datasets import build_two_stage_datasets
 from datasets.types import TwoStageDatasetBundle, TwoStageDatasetSplit
 from measurements import GridSpec, add_gaussian_noise, build_measurement_matrix, coefficients_to_feature_vector, compute_coefficients, compute_gradient_data, condition_number, create_grid, measurement_points_on_unit_circle, measurements_to_feature_vector
-from shapes import TwoCirclesSpec, create_fixed_benchmark_shapes
+from shapes import TwoCirclesSpec
 
 
 def _base_two_stage_run_config(
@@ -28,7 +28,8 @@ def _base_two_stage_run_config(
         rho=run_config.rho,
         grid_size=run_config.grid_size,
         threshold=run_config.threshold,
-        noise_level=run_config.noise_level,
+        noise_sigma=run_config.noise_sigma,
+        noise_mode=run_config.noise_mode,
         seed=run_config.seed,
         training_shape_weights=training_shape_weights,
         model=TwoStageStackConfig(),
@@ -148,7 +149,7 @@ def _sample_two_circle_specialist_shape(random_generator: np.random.Generator) -
     return regime, shape
 
 
-def _build_task9_specialist_split(sample_count: int, run_config, random_generator: np.random.Generator, grid_data, measurement_points, split_name: str) -> TwoStageDatasetSplit:
+def _build_task9_specialist_split(sample_count: int, run_config, random_generator: np.random.Generator, grid_data, measurement_points, split_name: str, add_noise: bool) -> TwoStageDatasetSplit:
     gradient_rows: list[np.ndarray] = []
     coefficient_rows: list[np.ndarray] = []
     mask_rows: list[np.ndarray] = []
@@ -160,9 +161,17 @@ def _build_task9_specialist_split(sample_count: int, run_config, random_generato
         mask = shape.compute_mask(grid_data.X, grid_data.Y)
         coefficient_values = compute_coefficients(mask, grid_data.X, grid_data.Y, grid_data.dA, n_max=run_config.N).coefficients
         gradient_values = compute_gradient_data(coefficient_values, measurement_points, run_config.N)
-        noisy_gradient_values = add_gaussian_noise(gradient_values, run_config.noise_level, random_generator)
-
-        gradient_rows.append(measurements_to_feature_vector(noisy_gradient_values))
+        measured_gradients = (
+            add_gaussian_noise(
+                gradient_values,
+                run_config.noise_sigma,
+                random_generator,
+                mode=run_config.noise_mode,
+            )
+            if add_noise
+            else gradient_values
+        )
+        gradient_rows.append(measurements_to_feature_vector(measured_gradients))
         coefficient_rows.append(coefficients_to_feature_vector(coefficient_values))
         mask_rows.append(mask.astype(np.float32).reshape(-1))
         shape_type_rows.append(shape.type)
@@ -227,6 +236,7 @@ def build_task9_specialist_dataset(run_config):
         grid_data,
         measurement_points,
         split_name="train",
+        add_noise=True,
     )
     validation_split = _build_task9_specialist_split(
         run_config.effective_specialist_validation_samples,
@@ -235,6 +245,7 @@ def build_task9_specialist_dataset(run_config):
         grid_data,
         measurement_points,
         split_name="validation",
+        add_noise=False,
     )
     test_split = _build_task9_specialist_split(
         max(1, run_config.effective_specialist_validation_samples),
@@ -243,6 +254,7 @@ def build_task9_specialist_dataset(run_config):
         grid_data,
         measurement_points,
         split_name="test",
+        add_noise=False,
     )
     fixed_split = _build_task9_specialist_fixed_split(run_config)
 

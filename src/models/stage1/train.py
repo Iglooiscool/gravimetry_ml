@@ -47,9 +47,16 @@ def _fit_stage1_model(
     validation_frequency: int | None = None,
     verbose: bool = True,
     early_stopping_patience: int | None = None,
+    lr_drop_factor: float | None = None,
+    lr_drop_period: int | None = None,
+    weight_decay: float = 0.0,
+    gradient_clip_norm: float | None = None,
 ) -> ModelTrainingResult:
     model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    scheduler = None
+    if lr_drop_factor is not None and lr_drop_period is not None:
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=lr_drop_period, gamma=lr_drop_factor)
     train_loader = _to_loader(train_features, train_targets, batch_size=batch_size, shuffle=True)
     val_loader = _to_loader(val_features, val_targets, batch_size=batch_size, shuffle=False)
     criterion = nn.MSELoss()
@@ -59,19 +66,20 @@ def _fit_stage1_model(
     best_state_dict: dict[str, torch.Tensor] | None = None
     wait_count = 0
     global_step = 0
-    stop_training = False
-
     for epoch_index in range(epochs):
         model.train()
         train_losses: list[float] = []
         validated_this_epoch = False
+        epoch_best_validation_loss = float("inf")
+        previous_best_validation_loss = best_validation_loss
 
         def run_validation() -> None:
-            nonlocal best_validation_loss, best_state_dict, wait_count, stop_training, validated_this_epoch
+            nonlocal best_validation_loss, best_state_dict, epoch_best_validation_loss, validated_this_epoch
             current_validation_loss = _evaluate_model(model, val_loader, criterion, device)
             history["val_loss"].append(current_validation_loss)
             history["validation_steps"].append(global_step)
             validated_this_epoch = True
+            epoch_best_validation_loss = min(epoch_best_validation_loss, current_validation_loss)
 
             if verbose:
                 latest_train_loss = float(np.mean(train_losses)) if train_losses else float("nan")
@@ -80,17 +88,9 @@ def _fit_stage1_model(
                     f"train_loss={latest_train_loss:.6f} | val_loss={current_validation_loss:.6f}"
                 )
 
-            stop_training, updated_best_validation_loss, updated_wait_count = stop_if_overfitting(
-                validation_loss=current_validation_loss,
-                best_validation_loss=best_validation_loss,
-                wait_count=wait_count,
-                patience=early_stopping_patience,
-            )
-            if updated_best_validation_loss < best_validation_loss:
+            if current_validation_loss < best_validation_loss:
                 best_validation_loss = current_validation_loss
                 best_state_dict = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
-            best_validation_loss = updated_best_validation_loss
-            wait_count = updated_wait_count
 
         for batch_features, batch_targets in train_loader:
             batch_features = batch_features.to(device)
@@ -99,22 +99,29 @@ def _fit_stage1_model(
             predictions = model(batch_features)
             loss = criterion(predictions, batch_targets)
             loss.backward()
+            if gradient_clip_norm is not None:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradient_clip_norm)
             optimizer.step()
             train_losses.append(float(loss.detach().cpu().item()))
             global_step += 1
 
             if validation_frequency is not None and validation_frequency > 0 and global_step % validation_frequency == 0:
                 run_validation()
-                if stop_training:
-                    break
                 model.train()
 
         if not validated_this_epoch:
             run_validation()
 
         history["train_loss"].append(float(np.mean(train_losses)))
-        if stop_training:
+        improved_this_epoch = epoch_best_validation_loss < previous_best_validation_loss
+        if improved_this_epoch:
+            wait_count = 0
+        else:
+            wait_count += 1
+        if early_stopping_patience is not None and wait_count >= early_stopping_patience:
             break
+        if scheduler is not None:
+            scheduler.step()
 
     if best_state_dict is not None:
         model.load_state_dict(best_state_dict)
@@ -135,6 +142,10 @@ def fit_stage1_model(
     validation_frequency: int | None = None,
     verbose: bool = True,
     early_stopping_patience: int | None = 10,
+    lr_drop_factor: float | None = None,
+    lr_drop_period: int | None = None,
+    weight_decay: float = 0.0,
+    gradient_clip_norm: float | None = None,
 ) -> ModelTrainingResult:
     """Train Stage 1 with MSE on normalized inputs and targets."""
 
@@ -159,6 +170,10 @@ def fit_stage1_model(
         validation_frequency=validation_frequency,
         verbose=verbose,
         early_stopping_patience=early_stopping_patience,
+        lr_drop_factor=lr_drop_factor,
+        lr_drop_period=lr_drop_period,
+        weight_decay=weight_decay,
+        gradient_clip_norm=gradient_clip_norm,
     )
     training_result.input_mean = input_mean
     training_result.input_std = input_std

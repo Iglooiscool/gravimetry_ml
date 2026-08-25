@@ -24,6 +24,7 @@ class StageTrainingConfig:
     loss_type: str = "bce"
     dice_loss_weight: float = 0.0
     dice_smooth: float = 1.0
+    iou_loss_weight: float = 0.0
 
 
 __all__ = ["StageTrainingConfig"]

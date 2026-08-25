@@ -9,6 +9,7 @@ from torch import nn
 
 from ..common_train import ModelTrainingResult
 from ..stage2.train import predict_stage2_logits
+from .router import predict_task9_router
 
 
 @dataclass
@@ -28,6 +29,7 @@ class Task9CombinedModel:
     specialist: Task9TrainedHead | None = None
     specialist_shape_type: str = "two_circles"
     routing_mode: str = "true_shape_type"
+    router: Task9TrainedHead | None = None
 
 
 def specialist_indices_for_shape_types(
@@ -48,11 +50,13 @@ def combine_task9_logits(
     shape_types: tuple[str, ...] | None,
     specialist_shape_type: str,
     routing_mode: str,
+    specialist_indices: np.ndarray | None = None,
 ) -> tuple[np.ndarray, int]:
     """Overlay specialist predictions onto the general predictions."""
 
     combined_logits = general_logits.copy()
-    specialist_indices = specialist_indices_for_shape_types(shape_types, specialist_shape_type, routing_mode)
+    if specialist_indices is None:
+        specialist_indices = specialist_indices_for_shape_types(shape_types, specialist_shape_type, routing_mode)
     if specialist_logits is None or specialist_indices.size == 0:
         return combined_logits, 0
     combined_logits[specialist_indices] = specialist_logits
@@ -73,7 +77,17 @@ def predict_task9_combined_logits(
         device=device,
         training_result=combined_model.general.training_result,
     )
-    specialist_indices = specialist_indices_for_shape_types(shape_types, combined_model.specialist_shape_type, combined_model.routing_mode)
+    specialist_indices = specialist_indices_for_shape_types(
+        shape_types, combined_model.specialist_shape_type, combined_model.routing_mode
+    )
+    if combined_model.routing_mode == "predicted_router" and combined_model.router is not None:
+        router_logits = predict_task9_router(
+            combined_model.router.model,
+            features,
+            training_result=combined_model.router.training_result,
+            device=device,
+        )
+        specialist_indices = np.flatnonzero(router_logits >= 0.0)
     specialist_logits = None
     if combined_model.specialist is not None and specialist_indices.size > 0:
         specialist_logits = predict_stage2_logits(
@@ -88,6 +102,7 @@ def predict_task9_combined_logits(
         shape_types=shape_types,
         specialist_shape_type=combined_model.specialist_shape_type,
         routing_mode=combined_model.routing_mode,
+        specialist_indices=specialist_indices,
     )
 
 

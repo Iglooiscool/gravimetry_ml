@@ -95,8 +95,8 @@ def sample_weighted_shape(
         shape_weights = shape_weights_override
     elif n_value >= 6:
         shape_weights = (
-            ("two_circles", 0.30),
-            ("annulus", 0.25),
+            ("two_circles", 0.45),
+            ("annulus", 0.10),
             ("rectangle", 0.25),
             ("ellipse", 0.15),
             ("circle", 0.05),

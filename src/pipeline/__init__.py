@@ -1,4 +1,4 @@
-"""Two-stage pipeline entry points."""
+"""Two-model reference workflow entry points."""
 
 from .diagnostics import summarize_training_history
 from .run import run_two_stage_once, run_two_stage_sweep

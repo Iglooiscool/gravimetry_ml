@@ -1,6 +1,7 @@
 import numpy as np
 
 from config import Stage1ModelConfig, StageTrainingConfig, Task9GeneralMLPConfig, Task9RunConfig, Task9SpecialistMLPConfig, Task9StackConfig
+from models.stage2 import SigmoidMSEMaskLoss
 from models.task9 import combine_task9_logits
 from workflows.task9 import build_task9_general_dataset, build_task9_specialist_dataset, run_task9_once
 from workflows.task9.datasets import augment_task9_feature_rows, augment_task9_general_training_split
@@ -28,6 +29,16 @@ def test_build_task9_specialist_dataset_contains_only_two_circles():
         "fixed_overlapping",
         "fixed_nested",
     )
+
+
+def test_task9_uses_sigmoid_mse_mask_loss():
+    import torch
+
+    loss = SigmoidMSEMaskLoss()
+    predictions = torch.tensor([[0.0, 2.0]])
+    targets = torch.tensor([[0.0, 1.0]])
+    expected = (((torch.sigmoid(predictions) - targets) ** 2).mean()).item()
+    assert loss(predictions, targets).item() == expected
 
 
 def test_task9_general_rectangle_augmentation_duplicates_rectangle_rows():
