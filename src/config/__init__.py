@@ -16,6 +16,13 @@ from .task9 import (
 )
 from .training import StageTrainingConfig
 from .one_model import OneModelRunConfig
+from .official import (
+    OFFICIAL_SHAPE_WEIGHTS,
+    OFFICIAL_TRAIN_SIGMAS,
+    official_one_stage_config,
+    official_three_stage_config,
+    official_two_stage_config,
+)
 
 __all__ = [
     "Stage1ModelConfig",
@@ -37,4 +44,9 @@ __all__ = [
     "TwoModelsRunConfig",
     "TwoModelsSweepConfig",
     "OneModelRunConfig",
+    "OFFICIAL_SHAPE_WEIGHTS",
+    "OFFICIAL_TRAIN_SIGMAS",
+    "official_one_stage_config",
+    "official_three_stage_config",
+    "official_two_stage_config",
 ]

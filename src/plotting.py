@@ -73,7 +73,14 @@ def save_condition_number_plot(results: list[dict[str, float]], output_path: Pat
 #
 # Returns:
 # - The path where the plot was saved
-def save_shape_gallery(shape_entries: list[tuple[str, object]], output_path: Path, grid_size: int = 32) -> Path:
+def save_shape_gallery(
+    shape_entries: list[tuple[str, object]],
+    output_path: Path,
+    grid_size: int = 32,
+    title: str | None = None,
+) -> Path:
+    """Save a shape gallery, optionally with run-context text above it."""
+
     grid_data = create_grid(GridSpec(grid_size=grid_size))
     fig = Figure(figsize=(3 * len(shape_entries), 3))
     FigureCanvasAgg(fig)
@@ -84,7 +91,11 @@ def save_shape_gallery(shape_entries: list[tuple[str, object]], output_path: Pat
         axis.imshow(shape.compute_mask(grid_data.X, grid_data.Y), cmap="gray", origin="lower")
         axis.set_title(name)
         axis.axis("off")
-    fig.tight_layout()
+    if title:
+        fig.suptitle(title, y=1.02)
+        fig.tight_layout(rect=(0, 0, 1, 0.94))
+    else:
+        fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
     return output_path
@@ -110,7 +121,10 @@ def save_reconstruction_examples(
     output_path: Path,
     grid_size: int,
     threshold: float,
+    title: str | None = None,
 ) -> Path:
+    """Save true/predicted masks with optional run-context text."""
+
     probabilities = 1.0 / (1.0 + np.exp(-predicted_logits))
     predicted_masks = (probabilities >= threshold).astype(np.float32)
     row_count = true_masks.shape[0]
@@ -126,7 +140,11 @@ def save_reconstruction_examples(
         axes[row_index, 1].imshow(predicted_masks[row_index].reshape(grid_size, grid_size), cmap="gray", origin="lower")
         axes[row_index, 1].set_title("Predicted")
         axes[row_index, 1].axis("off")
-    fig.tight_layout()
+    if title:
+        fig.suptitle(title, y=1.01)
+        fig.tight_layout(rect=(0, 0, 1, 0.97))
+    else:
+        fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
     return output_path

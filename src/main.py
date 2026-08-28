@@ -9,7 +9,12 @@ from __future__ import annotations
 import argparse
 import json
 
-from config import OneModelRunConfig, Task9RunConfig, Task9SweepConfig, TwoStageRunConfig, TwoStageSweepConfig
+from config import Task9SweepConfig, TwoStageSweepConfig
+from config.official import (
+    official_one_stage_config,
+    official_three_stage_config,
+    official_two_stage_config,
+)
 from workflows.one_model import run_one_model
 from workflows.two_models import run_two_models, run_two_models_sweep
 from workflows.three_models import run_three_models, run_three_models_sweep
@@ -27,9 +32,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a gravimetry model-count workflow")
     parser.add_argument("mode", choices=("run", "sweep"), help="Run one experiment or a full sweep")
     parser.add_argument("--model-count", type=int, choices=(1, 2, 3), default=1, help="Number of neural models to use")
-    parser.add_argument("--coefficient-order", "--N", dest="coefficient_order", type=int, default=8, help="Coefficient order for single-run mode")
+    parser.add_argument("--coefficient-order", "--N", dest="coefficient_order", type=int, default=10, help="Coefficient order for single-run mode")
     parser.add_argument("--train-samples", type=int, default=4000, help="Training sample count for single-run mode")
     parser.add_argument("--validation-samples", type=int, default=1000, help="Validation sample count for single-run mode")
+    parser.add_argument("--noise-sigma", type=float, default=0.0, help="Training gradient noise sigma for single-run mode")
     return parser.parse_args()
 
 
@@ -46,8 +52,9 @@ def main() -> None:
     if args.model_count == 1:
         if args.mode == "run":
             summary = run_one_model(
-                OneModelRunConfig(
-                    N=args.coefficient_order,
+                official_one_stage_config(
+                    args.noise_sigma,
+                    coefficient_order=args.coefficient_order,
                     training_samples=args.train_samples,
                     validation_samples=args.validation_samples,
                 )
@@ -57,8 +64,9 @@ def main() -> None:
     elif args.model_count == 2:
         if args.mode == "run":
             summary = run_two_models(
-                TwoStageRunConfig(
-                    N=args.coefficient_order,
+                official_two_stage_config(
+                    args.noise_sigma,
+                    coefficient_order=args.coefficient_order,
                     training_samples=args.train_samples,
                     validation_samples=args.validation_samples,
                 )
@@ -68,8 +76,9 @@ def main() -> None:
     else:
         if args.mode == "run":
             summary = run_three_models(
-                Task9RunConfig(
-                    N=args.coefficient_order,
+                official_three_stage_config(
+                    args.noise_sigma,
+                    coefficient_order=args.coefficient_order,
                     training_samples=args.train_samples,
                     validation_samples=args.validation_samples,
                 )

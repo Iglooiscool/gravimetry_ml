@@ -28,7 +28,14 @@ def save_run_figures(
 
     return {
         "measurement_points": str(save_measurement_points_plot(dataset_bundle.measurement_points, run_output_dir / "measurement_points.png")),
-        "fixed_shapes": str(save_shape_gallery(create_fixed_benchmark_shapes(), run_output_dir / "fixed_shapes.png", grid_size=run_config.grid_size)),
+        "fixed_shapes": str(
+            save_shape_gallery(
+                create_fixed_benchmark_shapes(),
+                run_output_dir / "fixed_shapes.png",
+                grid_size=run_config.grid_size,
+                title=f"Fixed benchmark shapes | training noise sigma={run_config.noise_sigma:g} | fixed inputs clean",
+            )
+        ),
         "fixed_general_predictions": str(
             save_reconstruction_examples(
                 true_masks=dataset_bundle.fixed.masks,
@@ -37,6 +44,7 @@ def save_run_figures(
                 output_path=run_output_dir / "fixed_general_predictions.png",
                 grid_size=run_config.grid_size,
                 threshold=run_config.threshold,
+                title=f"Two-stage general predictions | training noise sigma={run_config.noise_sigma:g}",
             )
         ),
         "fixed_general_true_coeff_predictions": str(
@@ -47,6 +55,7 @@ def save_run_figures(
                 output_path=run_output_dir / "fixed_general_true_coeff_predictions.png",
                 grid_size=run_config.grid_size,
                 threshold=run_config.threshold,
+                title=f"Two-stage true-coefficient diagnostic | training noise sigma={run_config.noise_sigma:g}",
             )
         ),
         "fixed_reconstructions": str(
@@ -57,6 +66,7 @@ def save_run_figures(
                 output_path=run_output_dir / "fixed_reconstructions.png",
                 grid_size=run_config.grid_size,
                 threshold=run_config.threshold,
+                title=f"Two-stage fixed reconstructions | training noise sigma={run_config.noise_sigma:g}",
             )
         ),
     }
