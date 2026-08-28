@@ -99,8 +99,21 @@ def run_one_model(run_config, device: torch.device | None = None) -> dict[str, o
     }
 
     save_measurement_points_plot(dataset.measurement_points, output_dir / "measurement_points.png")
-    save_shape_gallery(create_fixed_benchmark_shapes(), output_dir / "fixed_shapes.png", run_config.grid_size)
-    save_reconstruction_examples(dataset.fixed.masks, fixed_logits, dataset.fixed.names, output_dir / "fixed_reconstructions.png", run_config.grid_size, threshold)
+    save_shape_gallery(
+        create_fixed_benchmark_shapes(),
+        output_dir / "fixed_shapes.png",
+        run_config.grid_size,
+        title=f"Fixed benchmark shapes | training noise sigma={run_config.noise_sigma:g} | fixed inputs clean",
+    )
+    save_reconstruction_examples(
+        dataset.fixed.masks,
+        fixed_logits,
+        dataset.fixed.names,
+        output_dir / "fixed_reconstructions.png",
+        run_config.grid_size,
+        threshold,
+        title=f"One-stage fixed reconstructions | training noise sigma={run_config.noise_sigma:g}",
+    )
     torch.save(model.state_dict(), output_dir / "one_model_weights.pt")
     summary = {
         "model_count": 1,
